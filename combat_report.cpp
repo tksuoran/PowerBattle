@@ -1,0 +1,1 @@
+#include "combat_report.hpp"
