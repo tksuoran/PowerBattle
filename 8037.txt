@@ -1,0 +1,4973 @@
+Ver$ = "PowerBattle  v. 0.8037  1.10.1995"
+
+SetErr : Gosub Rs :End :End SetErr
+
+DEFTYPE .w
+#GM         = 1                       ; Compile Game ?
+#ED         = 1                       ; Compile Editors ?
+#DF         = 1                       ; Compile Definer ?
+#DM         = 1                       ; Default Map ok
+#UN         = 1                       ; Unit Defs ok
+#HX         = 1                       ; Hex Defs ok
+#HE         = 1                       ; Get Help
+#AU         = 1                       ; Get Audio
+#TI         = 0                       ; Stats ?
+
+Protection  = 4                       ; Protection Time, turns
+AUTOREFUEL  = True                    ; Automatic Refuel in City
+AUTOREPAIR  = True                    ; Automatic Repair in City
+
+; +++ CityLoad Secial Ability
+
+; +++ Fxd techlevel saving
+; --- New Game may jam if unsuitable inputs are given !!!
+
+; ... Chk view bottom unit leveled info
+; ... Chk Kill > UnitIcon, CityKill
+; ... Chk combat report attack
+
+; ... Pointer usage
+
+; .?. Attack from same hex
+; .?. MultiPlayer Battles - Select Targets / Defenders
+; .?. City defence: use which units to defence?
+; .?. Detect city as enemy
+
+; ... Historiikki
+; ... Liskskyt Follow, Fuel Transfer etc.
+
+; .?. Miinat
+
+; ... Zoom X4 bugaa
+; ... Hires Laced bugaa, Scroll (ScrollRaster_()?) ja MiniMap (Vgrfx?)
+
+; ??? Vuoropohjainen fuel lentokoneille
+; ??? Ranged Attack vain jos nkalueella / parempi osumis tod.nk.
+; ??? Leave PTime when Capture
+; ??? Pelaajakohtaiset asetukset
+; ??? Paneeli nyttmn levelist riippuvat tiedot
+
+; :-) Sillan plle voi rak. maata
+; :-) Attack without MPs (other unit assistance)
+
+; Unt-Sfxs  move           /  hit   /  kill    /   attack
+; Rep-Sfxs  damage         /  fuel  /  threat  /  -warning
+; Msg-Sfxs  reported etc...
+
+WBStartup                             ; A Must for WB-Progs
+CloseEd                               ; Editor Run Only: Free Mem.
+NoCli                                 ; Editor Run Only: Free Mem.
+
+WbToScreen 0
+DefaultIDCMP $440
+Window 0,160,12,320,160,$1406,Ver$,1,0,0
+WBox 0,0,319,159,1
+WBox 1,1,318,158,0
+Gosub Prefs
+Gosub Init_I                          ; Init Vars
+Gosub Init_II                         ; Init Grfx
+
+
+CNIF #GM=1
+Goto MAIN                             ; Main Loop
+
+CELSE
+Goto EDITORS
+
+CEND
+
+
+
+Prefs
+  If ReadFile(0,"S:PowerBattle.config")
+    FileInput 0
+    id        =Edit(80)
+    SXX       =Edit(80)
+    SYY       =Edit(80)
+    POS_LEFT  =Edit(80)
+    PB        =Edit(80)
+    SKIP      =Edit(80)
+    AUDIO     =Edit(80)
+    AUTOMT    =Edit(80)
+    MoveSpeed =Edit(80)
+    Skrol     =Edit(80)
+    CloseFile 0
+  Else
+;    If ExecVersion>36
+;      MyModes.l=#SCREQF_OVERSCANGAD|#SCREQF_SIZEGADS
+;      *mysm=RTEZScreenModeRequest("Select ScreenMode",MyModes)
+;    EndIf
+;    If *mysm
+;      id  = *mysm\DisplayID
+;      SXX = *mysm\DisplayWidth
+;      SYY = *mysm\DisplayHeight
+    id  = 0
+    SXX = 320
+    SYY = 258
+    POS_LEFT  = False                 ; InfoPanel's & MiniMap's Position
+    PB        = False                 ; Panel Buttons Active
+    SKIP      = False                 ; Automatic Combat Report Advance
+    AUDIO     = False                 ; (De)Active
+    AUTOMT    = True                  ; Automactic MoveTo
+    MoveSpeed = 4                     ; Unit Sliding Speed
+    Skrol     = 4                     ; Key Scroll Size
+  EndIf
+  Return
+
+
+
+Init_I
+  #Ply_Abs_Max =  16                  ; Absolute # Players
+  #Ply_Max     =   4                  ; Max. # Players Compiled
+  #MMX         = 124                  ; Map Max. Width
+  #MMY         = 124                  ; Map Max. Height
+  #FYS         =   8                  ; Font YSize
+
+  #IUnits      = 240                  ; Individual Units/Factories per Player
+  #FMax        = 130                  ; Factories per Player
+  #CMax        = 130                  ; Cities
+  #Reps        = 350                  ; Combat Report Events per Player
+  #Messages    =  50                  ; Messages to single Player
+
+  #StrLen      =  11                  ; Chars in Name/PWord Strings
+  #lStrLen     =  16                  ; Chars in load Strings
+  #sStrLen     =  16                  ; Chars in save Strings
+  #tStrLen     =  11                  ; Chars in truncated Strings
+  #GnsLen      =  11                  ; Chars in CityNames
+  #MsgLen      =  22                  ; Chars in Messages
+
+  #HTypes      =  55                  ; HexTypes
+  #HDefs       =  11                  ; HexType Definition Bytes
+  #LHDefs      =  11                  ; -"- to be loaded
+  #UTypes      =  42                  ; UnitTypes
+  #UDefs       =  46                  ; UnitType Definition Bytes
+  #LUDefs      =  46                  ; -"- to be loaded
+  #UExtras     = 4*7+11               ; Extra Unit Icons, other than single unit
+  #Units_Hex   =  14                  ; Units in Single Hex
+  #Multis      =   7                  ; MultiShapeGroups
+
+  #F0 = 35                            ; First Factory Unit
+  #F1 = 38                            ; Last Factory Unit
+  #UW =  7                            ; Unit Row width
+  #UM = #UTypes+#UExtras              ; Total Unit Icons
+  #LU = #UTypes                       ; Leveled Units
+  #SH = #UM+#UTypes+#UW+1             ; Shadowing Shapes
+  #RI = #SH+2                         ; Range Icon
+  #MT = #UTypes+2*#UW-3               ; MultipleMoveTypes
+  #HC = #UTypes+3*#UW                 ; HiLited Cities
+  #MP = #UTypes+4*#UW                 ; MultiPlayers
+
+  #GBM  = 0                           ; GameBitMap - Main Game Screen
+  #MBM  = 1                           ; MapBitMap - MiniMap
+  #ZBM  = 2                           ; ZoomBitMap - ZoomedMiniMap
+  #SBM  = 3                           ; ShapesBitMap - Init Phase Only
+  #DBM  = 4                           ; DefinerBitMap
+  #GPAL = 0                           ; GamePalette - Main Game Screen
+  #HPAL = 1                           ; HelpPalette - Help Screen
+
+  #HXX  = 14 : #HYY = 12              ; Hexpiece Size
+  #HDX  = 11 : #HDY = 6               ; Hexpiece Placing Modifiers
+  #PNX  = 13 : #PNY = 13              ; Panel Buttons' Size
+
+  #tw      = 5
+  #ters    = #HTypes + #Multis*64 - 1
+  #Ztc_Sps = (#Ply_Abs_Max+1)*3+1
+  #Ztr_Sps = #Ztc_Sps + 1
+  #Coo_Sps = #Ztr_Sps + #HTypes
+  #grd_Sps = #Coo_Sps + 1
+  #Grd_Sps = #grd_Sps + #tw
+  #Ter_Sps = #Grd_Sps + 4
+  #Mul_ofs = #HTypes
+  #Vgr_Sps = #Ter_Sps + #Mul_ofs + #Multis*64
+  #Xpl_Sps = #Vgr_Sps + #tw
+  #Unt_Sps = #Xpl_Sps + 7
+  #Pnl_Sps = #Unt_Sps + #UM
+  #GAS     = #Pnl_Sps + 4
+
+  #HC_VISIONIZE   =   1               ; HexCircle Options
+  #HC_REPORT      =   2
+  #HC_SUB_LOAD    =   3
+  #HC_SUB_MOVE_TO =   4
+  #HC_MS_CALC     =   5
+  #HC_MS_CORR     =   6
+  #HC_SUB_MAP_ED  =   7
+
+  #SA_HAS_PARACH    =   1             ; Special Abilities
+  #SA_DO_PLAIN      =   2
+  #SA_DO_FIELD      =   4
+  #SA_DO_ROAD       =   8
+  #SA_DO_BRIDGE     =  16
+  #SA_DO_FORTRESS   =  32
+  #SA_DO_NOT_CDEF   =  64
+  #SA_NCITY_LOAD    = 128
+  #SA_NPRCH_UNLOAD  = 256
+
+  #CADD           =   1               ; Cui Mode; Addition
+  #CREM           =   2               ; Remove
+  #CCIT           =   3               ; City Capture
+  #CLEV           =   4               ; Level
+
+  #MT_AIR         =   1               ; Air Movement Type
+  #MT_AT_AIR      =   2               ; AT-Air (Carriers)
+  #MT_LT_GND      =   4               ; Light Ground
+  #MT_HV_GND      =   8               ; Heavy Ground
+  #MT_LT_SEA      =  16               ; Light Sea Ship
+  #MT_HV_SEA      =  32               ; Heavy Sea Ship
+  #MT_SUB         =  64               ; Submarine
+
+  #BT_AIR         =   1               ; Air Battle Type
+  #BT_GND         =   2               ; Ground
+  #BT_SEA         =   3               ; Sea
+  #BT_SUB         =   4               ; Submarine
+  #BT_CITY        =   5               ; City -> Ground
+
+  #T_FORTRESS     =  19               ; Fortress Terrain
+  #T_CITY         =  15               ; Base Factory
+  #T_ROAD         =  20               ; Base Road
+  #T_BRIDGE       =  12               ; Base Bridge
+  #T_PLAIN        =  31               ; Plain
+  #T_FIELD        =  39               ; Field
+  #T_MED_WAT      =   3               ; Medium Waters
+
+
+
+
+  NEWTYPE .gadgetlist                 ; Gadgetlist Refresh Support
+    _gadgets.l
+  End NEWTYPE
+
+  NEWTYPE .window                     ; Windoww Structure
+    _window.l
+    _cursx.w
+    _cursy.w
+    _pointer.l
+    _length.l
+  End NEWTYPE
+
+  NEWTYPE .Map                        ; Maps
+   HX.w                               ; Terrain Type
+   UI                                 ; Unit Icon
+  End NEWTYPE
+
+  NEWTYPE .coord                      ; Coordinate Modifier for HA-Routines
+   x.w                                ; X-Modifier
+   y                                  ; Y-Modifier
+   l                                  ; X-Even conditional Y-Modifier (for example...)
+  End NEWTYPE
+
+  NEWTYPE .mshape                     ; MultiShaped TerrainGroups
+   a.w                                ; Base TerrainHex
+   b                                  ; First Normal Hex to be Linked
+   c                                  ; Last   -  "  -
+   d                                  ; Another Group to be Linked
+   e                                  ; Yet Another Group
+   f                                  ; Like b
+   g                                  ; Like c
+  End NEWTYPE
+
+  NEWTYPE .HType                      ; Terrain Hex Type
+   Color.w                            ; PixelColour
+   MAllow                             ; Movement Allowance Bits
+   MCost                              ; Movement Cost
+   Threat                             ; Threat Value
+   ADamage                            ; Transform to which after Damage
+   DBonus                             ; Defence Bonus
+   CSize                              ; City Size
+   Strength                           ; Strength against Damaging
+   Mult                               ; Central Multihex Transformation
+   VChg                               ; Reserved
+   HNum                               ; Multihex BaseHex
+  End NEWTYPE
+
+  NEWTYPE .UType                      ; Unit Type
+   MType.w                            ; Movement Type Bits
+   Moves[2]                           ; Movement Points per Turn
+   TDef                               ; Threat Defence
+   Fuel                               ; Fuel Tank Size
+   Refuel                             ; Refuel Points per Turn
+   CType                              ; Cargo Type Bits
+   Cargo                              ; Cargo Space
+   Loading                            ; Loadings/Unloadings per Turn
+   Tech                               ; Required Techlevel for Production
+   PTime                              ; Production Time
+   Cost                               ; Reserved
+   Hits                               ; Maximum HitPoints
+   Repair                             ; Repair Points per Turn
+   Levels                             ; Reserved
+   BType                              ; Battle Type #
+   Attack[4]                          ; Attack Points against BattleTypes
+   Defence[4]                         ; Defence  -  "  -
+   LgtGndMod                          ; Light Ground Modifier
+   Range[2]                           ; Artillery Attack Range
+   RAttack                            ; Ranged Attack Modifier
+   Ammo                               ; Ammunitation Storage
+   Shots                              ; Artillery Attacks per Turn
+   LAtt                               ; Attack LevelModifier
+   LDef                               ; Defence LevelModifier
+   CAttack                            ; City Attack Modifier
+   Vision[2]                          ; Vision Range
+   VFrom[2]                           ; Visible From -Range
+   LUI                                ; Leveled Unit Icon #
+   fff                                ; Reserved
+   ggg                                ; Reserved
+   hhh                                ; Reserved
+   Sfx                                ; Sound Effect #
+   Frequ                              ; Sound Effect Frequency
+   Specials                           ; Special Abilities
+   Undefd                             ; Reserved
+   L                                  ; Reserved
+  End NEWTYPE ; 46
+
+  CNIF #GM=1
+
+  NEWTYPE .Player                     ; General Player Information
+   unts.w                             ; Operative Units (Facs. too)
+   cmbs                               ; Combat Report Events Received
+   msgs                               ; Messages Received
+   facs                               ; Operative Factories
+   tous                               ; Total Units; Latest Product ID
+   tech[4]                            ; Tech-level
+   act[#UTypes]                       ; Active Units
+   lost[#UTypes]                      ; Lost Units
+   kills[#UTypes]                     ; Killed (Enemy) Units
+   prod[#UTypes]                      ; Units Under Production
+   L                                  ; Reserved
+  End NEWTYPE
+
+  NEWTYPE .Unit                       ; Individual Units
+   T.w                                ; Unit Type
+   X                                  ; X-Position
+   Y                                  ; Y-Position
+   Com                                ; Command, Orders
+   CX                                 ; Command Target X
+   CY                                 ; Command Target Y
+   CP[4]                              ; Command Parameters, Various Information
+   Level                              ; Level Position
+   Hits                               ; Current HitPoints
+   Moves                              ; Current Movement Points Left
+   Fuel                               ; Current Fuel
+   Vet                                ; Experience Modifier
+   Vis                                ; Visible to Active Player?
+   TDef                               ; Current Threat Defence
+   Ammo                               ; Current Ammo Storage
+   FarF                               ; Current Artillery attacks Left
+   Cargo                              ; Cargo Space Usage
+   Loading                            ; Current (Un)Loadings Left
+   Carrier                            ; Carrier Unit (who is transporting this unit)
+   PTime                              ; Production Time Done
+   Prod                               ; Product #
+   ProdNo                             ; Production ID
+   Factory                            ; Producer Factory #
+   FacID                              ; Factory ID
+   L                                  ; Reserved
+  End NEWTYPE
+
+  NEWTYPE .Report                     ; Combat Report Events
+   Rep.w                              ; Report Type
+   T                                  ; Unit Type
+   X                                  ; I Where
+   Y                                  ;
+   x                                  ; II Where
+   y                                  ;
+   Fac                                ; Producer
+   Prd                                ; Production # ID
+   HX                                 ; I Hex Contents
+   UI                                 ;
+   hx                                 ; II Hex Contents
+   ui                                 ;
+  End NEWTYPE
+
+  CEND
+
+
+
+  DEFTYPE .q AV,DV,yq
+  DEFTYPE .l h0,h1,h2,ca,ret
+  DEFTYPE .l Cookie,rp,AM,id,sr,tim
+  DEFTYPE .l SXX,SYY,l
+  DEFTYPE .w
+
+  MaxLen M$  = 256                    ; FileRquester !
+  MaxLen G$  = 256
+  MaxLen mf$ = 256
+  MaxLen gf$ = 256
+  MaxLen T$  = 256
+  MaxLen P$  = 256
+  MaxLen F$  = 256
+
+
+
+  d$  = "PowerBattle:"                ; Dirs
+  D$  = d$+"Data/"
+  S$  = D$+"Sfx/"
+  M$  = "PBMaps:"
+  G$  = "PBSave:"
+
+  Cu$ = Chr$(28)                      ; Curser Moves
+  Cd$ = Chr$(29)
+  Cr$ = Chr$(30)
+  Cl$ = Chr$(31)
+  Cm$ = Cu$+Cr$+Cd$+Cl$
+  mf$ = "default"
+
+  movstring$ = "456123"
+  comstring$ = "[]{}780./9lum*-+qf rubg\ps"+Cm$+movstring$
+  intstring$ = "[]-+`"+Cm$
+
+
+
+
+  Dim p2.b     (8)                    ; Powers of 2 (Bits)
+  Dim m.mshape (#Multis)              ; MultiShapeGroups
+  Dim c.coord  (26,4)                 ; HA-Coordinate Mods.
+  Dim H.HType  (#HTypes+#Multis*64)   ; Hex Types
+  Dim HName$   (#HTypes)              ; Hex Names
+  Dim UName$   (#UTypes)              ; Unit Names
+  Dim U.UType  (#UTypes)              ; Unit Types
+  Dim WSX (4)                         ; Area Widths
+  Dim WSY (4)                         ; Area Heights
+  Dim WXw (4)                         ; Area Lefts
+  Dim WYw (4)                         ; Area Tops
+  Dim WXr (4)                         ; Area Rights
+  Dim WYr (4)                         ; Area Bottoms
+  Dim WXd (4)                         ; Area X-Centers
+  Dim WYd (4)                         ; Area Y-Centers
+
+  CNIF #DF=1
+
+  Dim DAT.w  (65,65)                  ; Data
+  Dim PX     (65)                     ; Left Edges
+  Dim TName$ (65)                     ; Type Names
+  Dim Def$   (65)                     ; Definition Names
+  Dim HDef$  (#HDefs)                 ; -"-
+  Dim UDef$  (#UDefs)                 ; -"-
+  Dim ot     (20)                     ; X-Positions
+  Dim od     (20)                     ; Y-Positions
+
+  CEND
+
+  CNIF #GM=1
+
+  Dim bti      (%100000)              ; Multiple BattleType Icons
+  Dim bti_rev  (10)                   ; MBTI Reverse Function
+  Dim mpi      (10)                   ; MultiPlayer Icons
+  Dim mpi_rev  (%1111)                ; MPI Reverse Function
+  Dim lui_rev  ((#MT MOD #UM)-#LU+1)  ; LUI Reverse Function
+  Dim hP       (#Units_Hex,1)         ; Hex Player
+  Dim hN       (#Units_Hex,1)         ; Hex Unit ID
+  Dim hI       (1)                    ; Hex Icon
+  Dim hS       (1)                    ; Hex unit Counr
+  Dim Com$     (20)                   ; Commands, Orders
+  Dim Rep$     (10)                   ; Reports
+  Dim CLU      (30)                   ; Loaded Units IDs
+  Dim oun      (#Units_Hex)           ; Other Units' in Hex IDs
+  Dim city.coord (#CMax)              ; City Positions
+  Dim pc       (1,#Ply_Max-1)         ; Player positions
+  Dim IR.b     (#UM)                  ; Unit Icon Range
+  Dim I.Unit (#IUnits+1,#Ply_Max-1)   ; Individual Units
+  Dim R.Report (#Reps+1,#Ply_Max-1)   ; Reports
+  Dim P.Player (#Ply_Max)             ; Player General Info
+  Dim PName$   (#Ply_Max)             ; Players Names
+  Dim PCode$   (#Ply_Max)             ; Players Codes
+  Dim FName$   (#FMax,#Ply_Max)       ; Factory Names
+  Dim Message$ (#Messages,#Ply_Max)   ; Messages
+  Dim bridge   (7)                    ; CirPos Bridge Hexs
+  Dim N_  (1)                         ; Battle
+  Dim P_  (1)                         ;  temp
+  Dim U_  (1)                         ;  data
+  Dim T_  (1)                         ;  storages
+  Dim B_  (1)                         ;
+  Dim X_  (1)                         ;
+  Dim Y_  (1)                         ;
+  Dim PNX (4)                         ; InfoPanel X-Poss.
+  Dim I$  (1,2)                       ; InfoPanel Strings
+  Dim M.Map    (#MMX,#MMY,#Ply_Max)   ; Maps
+
+  CELSE
+
+  Dim M.Map    (#MMX,#MMY,0)
+
+  CEND
+
+
+
+
+  CNIF #GM=1
+
+  bti(%0000) =0
+  bti(%0001) =1                       ; Multiple BattleType Icons
+  bti(%0010) =2
+  bti(%0011) =#MT+0
+  bti(%0100) =3
+  bti(%0101) =#MT+1
+  bti(%0110) =#MT+2
+  bti(%0111) =#MT+3
+  bti(%1000) =4
+  bti(%1001) =#MT+4
+  bti(%1010) =#MT+5
+  bti(%1011) =#MT+6
+  bti(%1100) =#MT+7
+  bti(%1101) =#MT+8
+  bti(%1110) =#MT+9
+  bti(%1111)   =5
+  bti(%10000)  =5
+  bti(%100000) =5
+
+  bti_rev(0) =%0011                   ; MBTI Reverse Function
+  bti_rev(1) =%0101
+  bti_rev(2) =%0110
+  bti_rev(3) =%0111
+  bti_rev(4) =%1001
+  bti_rev(5) =%1010
+  bti_rev(6) =%1011
+  bti_rev(7) =%1100
+  bti_rev(8) =%1101
+  bti_rev(9) =%1110
+
+  mpi( 0) = %0011
+  mpi( 1) = %0101
+  mpi( 2) = %0110
+  mpi( 3) = %0111
+  mpi( 4) = %1001
+  mpi( 5) = %1010
+  mpi( 6) = %1011
+  mpi( 7) = %1100
+  mpi( 8) = %1101
+  mpi( 9) = %1110
+  mpi(10) = %1111
+
+  mpi_rev(%0000) = 90
+  mpi_rev(%0001) = 91
+  mpi_rev(%0010) = 92
+  mpi_rev(%0011) =  0
+  mpi_rev(%0100) = 93
+  mpi_rev(%0101) =  1
+  mpi_rev(%0110) =  2
+  mpi_rev(%0111) =  3
+  mpi_rev(%1000) = 94
+  mpi_rev(%1001) =  4
+  mpi_rev(%1010) =  5
+  mpi_rev(%1011) =  6
+  mpi_rev(%1100) =  7
+  mpi_rev(%1101) =  8
+  mpi_rev(%1110) =  9
+  mpi_rev(%1111) = 10
+
+  Com$( 0)="no orders"    : #C_NO_ORDERS    =  0 ; Command Strings
+  Com$( 1)="Producing"    : #C_PRODUCING    =  1
+  Com$( 2)="MoveTo Stop"  : #C_MOVETO_STOP  =  2
+  Com$( 3)="Transport"    : #C_TRANSPORT    =  3
+  Com$( 4)="Prod. halted" : #C_PROD_HALTED  =  4
+  Com$( 5)="Out of Fuel"  : #C_OUT_OF_FUEL  =  5
+  Com$( 6)="Temp. sentry" : #C_TEMP_SENTRY  =  6
+  Com$( 7)="Sentry"       : #C_SENTRY       =  7
+  Com$( 8)="Prod. done"   : #C_PROD_DONE    =  8
+  Com$( 9)="Load prep"    : #C_LOAD_PREP    =  9
+  Com$(10)="Move To"      : #C_MOVE_TO      = 10
+  Com$(11)="Follow"       : #C_FOLLOW       = 11
+  Com$(12)="Towed"        : #C_TOWED        = 12
+  Com$(13)="Build R. To"  : #C_BUILD_R_TO   = 13
+  Com$(14)="Build"        : #C_BUILD        = 14
+  Com$(15)="Rngd. Attack" : #C_RNGD_ATT     = 15
+  Com$(16)="Capture"      : #C_CAPTURE      = 16
+  Com$(17)="Fortress"     : #C_FORTRESS     = 17
+  Com$(18)="Reserved"     : #C_RESERVED     = 18
+  Com$(19)="Reserved"     :
+  Com$(20)="Reserved"     :
+
+  Rep$( 1)="Reported"     : #R_REPORTED     = 1  ; Combat Reports
+  Rep$( 2)="Damaged"      : #R_DAMAGED      = 2
+  Rep$( 3)="Destroyed"    : #R_DESTROYED    = 3
+  Rep$( 4)="Repulsed"     : #R_REPULSED     = 4
+  Rep$( 5)="Attack"       : #R_ATTACK       = 5
+  Rep$( 6)="Message"      : #R_MESSAGE      = 6
+  Rep$( 7)="Rngd. Attack" : #R_RNGD_ATTACK  = 7
+  Rep$( 8)="Terrain"      : #R_TERRAIN      = 8
+
+  bridge(2) = 11                      ; Bridge hexs
+  bridge(3) = 12
+  bridge(4) = 13
+  bridge(5) = 11
+  bridge(6) = 12
+  bridge(7) = 13
+
+  CEND
+
+  m(0)\a = 20,11,22,-1,-1,-1,-1       ; Road
+  m(1)\a = 28,28,29,-1,-1,-1,-1       ; Peak
+  m(2)\a = 41,41,44,-1,-1,-1,-1       ; Forest
+  m(3)\a = 45,45,49, 1,-1,28,29       ; Mountain
+  m(4)\a =  5, 5,18, 5, 6,-1,-1       ; Water Low
+  m(5)\a =  3, 3, 4, 6,-1,-1,-1       ; Water Medium
+  m(6)\a =  1, 1, 2,-1,-1,-1,-1       ; Water Deep
+
+  p2(0) =   0                         ; Bits
+  p2(1) =   1
+  p2(2) =   2
+  p2(3) =   4
+  p2(4) =   8
+  p2(5) =  16
+  p2(6) =  32
+  p2(7) =  64
+  p2(8) = 128
+
+  c( 0,1)\x= 7                        ; HA Coordinate Modifiers
+  c( 1,1)\x= 0, 0, 0
+  c( 2,1)\x= 0,-1, 0
+  c( 3,1)\x= 1, 0,-1
+  c( 4,1)\x= 1, 1,-1
+  c( 5,1)\x= 0, 1, 0
+  c( 6,1)\x=-1, 1,-1
+  c( 7,1)\x=-1, 0,-1
+  c( 0,2)\x=12
+  c( 1,2)\x= 0,-2, 0
+  c( 2,2)\x= 1,-1,-1
+  c( 3,2)\x= 2,-1, 0
+  c( 4,2)\x= 2, 0, 0
+  c( 5,2)\x= 2, 1, 0
+  c( 6,2)\x= 1, 2,-1
+  c( 7,2)\x= 0, 2, 0
+  c( 8,2)\x=-1, 2,-1
+  c( 9,2)\x=-2, 1, 0
+  c(10,2)\x=-2, 0, 0
+  c(11,2)\x=-2,-1, 0
+  c(12,2)\x=-1,-1,-1
+  c( 0,3)\x=18
+  c( 1,3)\x= 0,-3, 0
+  c( 2,3)\x= 1,-2,-1
+  c( 3,3)\x= 2,-2, 0
+  c( 4,3)\x= 3,-1,-1
+  c( 5,3)\x= 3, 0,-1
+  c( 6,3)\x= 3, 1,-1
+  c( 7,3)\x= 3, 2,-1
+  c( 8,3)\x= 2, 2, 0
+  c( 9,3)\x= 1, 3,-1
+  c(10,3)\x= 0, 3, 0
+  c(11,3)\x=-1,-2,-1
+  c(12,3)\x=-2,-2, 0
+  c(13,3)\x=-3,-1,-1
+  c(14,3)\x=-3, 0,-1
+  c(15,3)\x=-3, 1,-1
+  c(16,3)\x=-3, 2,-1
+  c(17,3)\x=-2, 2, 0
+  c(18,3)\x=-1, 3,-1
+  c( 0,4)\x=26
+  c( 1,4)\x= 0,-4, 0
+  c( 2,4)\x= 1,-3,-1
+  c( 3,4)\x= 2,-3, 0
+  c( 4,4)\x= 3,-2,-1
+  c( 5,4)\x= 4,-2, 0
+  c( 6,4)\x= 4,-1, 0
+  c( 7,4)\x= 4, 0, 0
+  c( 8,4)\x= 4, 1, 0
+  c( 9,4)\x= 4, 2, 0
+  c(10,4)\x= 4, 2, 0
+  c(11,4)\x= 3, 3,-1
+  c(12,4)\x= 2, 3, 0
+  c(13,4)\x= 1, 4,-1
+  c(14,4)\x= 0, 4, 0
+  c(15,4)\x=-1, 4,-1
+  c(16,4)\x=-2, 3, 0
+  c(17,4)\x=-3, 3,-1
+  c(18,4)\x=-4, 2, 0
+  c(19,4)\x=-4, 2, 0
+  c(20,4)\x=-4, 1, 0
+  c(21,4)\x=-4, 0, 0
+  c(22,4)\x=-4,-1, 0
+  c(23,4)\x=-4,-2, 0
+  c(24,4)\x=-3,-2,-1
+  c(25,4)\x=-2,-3, 0
+  c(26,4)\x=-1,-3,-1
+  Return
+
+
+
+
+
+
+.macros
+Macro sd:WriteMem0,&`1,&`2-&`1+2:End Macro  ; Save some vars.  `1 = first var, `2 = last
+Macro ld:ReadMem 0,&`1,&`2-&`1+2:End Macro  ; Load some vars.  `1 = first var, `2 = last
+Macro ss:Print `1+String$(" ",`2-Len(`1)):End Macro
+Macro ls:`1=StripTrail$(Edit$(`2),Asc(" ")):End Macro
+Macro si:Print Mki$(`1):End Macro
+Macro li:`1=Cvi(Edit$(2)):End Macro
+Macro ad:`1+(`2):If`1<`3:`1=`4:EndIf:If`1>`4:`1=`3:EndIf:End Macro  ; Executes add & checks range
+Macro s:If`1<`2:`1+(`3):EndIf:If`1=>`3:`1-(`3):EndIf:If`4<`5:`4+(`6):EndIf:If`4=>`6:`4-(`6):EndIf:End Macro
+Macro c:If`1<`2:`1+(`4):EndIf:If`1=>`3:`1-(`4):EndIf:If`5<`6:`5+(`8):EndIf:If`5=>`7:`5-(`8):EndIf:End Macro
+Macro z:If`1<`2:`1+(`3):EndIf:If`1=>`3:`1-(`3):EndIf:End Macro
+Macro sxy   : !s{x,0,MXX,y,0,MYY}   :End Macro ; Statement usage allowed
+Macro sXY   : !s{X,0,MXX,Y,0,MYY}   :End Macro ; Statement usage allowed
+Macro sLXLY : !s{LX,0,MXX,LY,0,MYY} :End Macro
+Macro sTXTY : !s{TX,0,MXX,TY,0,MYY} :End Macro
+Macro Ch:If`1=>SXA AND`2=>SYA AND`1<SXA+WGX-#HXX AND`2<SYA+WGY-#HYY:End Macro  ; Check area, start If-statement
+Macro Clin:Boxf PNX(`1),PYY+(`2)*#FYS,PNX(`3)-1,PYY+(`4)*#FYS-1,CS:End Macro  ; Clear area from InfoPanel
+Macro l:If`1>l:l=`1:EndIf:End Macro
+Macro m:`1.l=FNSLength(1,`2):End Macro
+Macro Eg:Goto n:EndIf:End Macro
+
+Macro HexBlit
+  Blit #Ter_Sps+`1,x0,y0,0
+
+  CNIF #GM=1
+  If SU AND `2>0 : Blit #Unt_Sps+((`2) MOD #UM),x0,y0,(`2)/#UM :EndIf
+  CEND
+
+  CNIF (`3)=1
+  If GRD : Blit #Vgr_Sps+GRD-1,x0,y0,0 :EndIf
+  CEND
+
+  End Macro
+  ; Blits single hex.  `1 = Terrain, `2 = UnitIcon, `3 = Grid?
+
+
+.Globals
+Macro globals
+  CNIF #GM=1
+
+  SHARED *U.Unit,*T.UType,*P.Player,*M.Map,*H.HType
+  SHARED *u.Unit,*t.UType,*p.Player,*m.Map,*h.HType
+
+  SHARED P(),I(),U(),R()
+  SHARED RepFlag,AUDIO,bti(),bti_rev(),mpi(),mpi_rev(),lui_rev()
+  SHARED hP(),hS(),hI(),hN(),IR()
+  SHARED Players,P,B,U,U0,MSY
+  SHARED TRANS,AIR,CITY
+  CEND
+  SHARED SXA,SYA,SXX,SYY,C0,C1,C2,C3,C4,CS,CB,CY,MC
+  SHARED MPX,MPY,MXX,MYY,DX,DY,WGX,WGY,PNX(),PYY
+  SHARED WXd(),WYd(),WXw(),WYw(),WXr(),WYr()
+  SHARED H(),M(),p2(),c(),m()
+  SHARED rp,AM,id,sr,exit
+  SHARED Z,SU,LX,LY,vT,vU,vC,GRD
+  SHARED h0,h1,h2,ca,Ver$
+  SHARED T$,P$,F$
+  End Macro
+
+Macro GameIO
+
+  CNIF #IO=1
+  FileOutput 0
+  CELSE
+  FileInput 0
+  CEND
+
+  !Ii{Players}
+  !Ii{Turn}
+  !Ii{MXX}
+  !Ii{MYY}
+  !Ii{ProdF}
+  !Ii{TechF}
+  !Ii{P}
+  For p=0 To Players-1
+    b=p+1
+    !Is{PName$(p),#StrLen}
+    !Is{PCode$(p),#StrLen}
+    For t=0 To 3
+      !Ii{P(p)\tech[t]}
+    Next
+    For y=0 To MYY : !Id{M(0,y,b)\HX,M(MXX,y,b)\UI} :Next
+    !Id{P(p)\unts,P(p)\L}
+    !Id{R(0,p)\Rep,R(P(p)\cmbs+1,p)\T}
+    !Id{I(0,p)\T,I(P(p)\unts+1,p)\L}
+    For f=0 To P(p)\facs : !Is{FName$  (f,p),#GnsLen} :Next
+    For m=0 To P(p)\msgs : !Is{Message$(m,p),#MsgLen} :Next
+  Next
+  For y=0 To MYY : !Id{M(0,y,0)\HX,M(MXX,y,0)\UI} :Next
+  CloseFile 0
+  End Macro
+  ; Save or Load game
+
+Macro Ii
+  CNIF #IO=1
+  !si{`1}
+  CELSE
+  !li{`1,`2}
+  CEND
+  End Macro  ; Save or Load var
+
+Macro Is
+  CNIF #IO=1
+  !ss{`1,`2}
+  CELSE
+  !ls{`1,`2}
+  CEND
+  End Macro  ; Save or Load string. `1 = string, `2 = len
+
+Macro Id
+  CNIF #IO=1
+  !sd{`1,`2}
+  CELSE
+  !ld{`1,`2}
+  CEND
+  End Macro  ; Save or Load some vars. `1 = first var `2 = last
+
+Macro GCalc
+  If (`1) & 1
+    YL = -1 Else
+    YL =  0:EndIf
+  zx = `1-LX
+  zy = `2-LY
+  !s{zx,0,MXX,zy,0,MYY}
+  If zx & 1
+    yl = 0    Else
+    yl = #HDY:EndIf
+  `3 = SXA+#HDX*zx
+  `4 = SYA+#HYY*zy+yl
+  End Macro
+  ; Calc grfx-coords. from hex-coords.
+
+
+
+
+
+Border
+  Blit #Grd_Sps  ,SXA,SXB,0
+  Blit #Grd_Sps+1,SXA+WGX-#HDX,SYA,0
+  Blit #Grd_Sps+2,SXA,SYA+WGY-#HDY-1,0
+  Blit #Grd_Sps+3,SXA,SYA,0
+  Return
+  ; Blit main borders
+
+GCalc : !GCalc{x,y,x0,y0}     :Return ; Only use outside Statements
+sxy   : !s{x,0,MXX,y,0,MYY}   :Return
+sLXLY : !s{LX,0,MXX,LY,0,MYY} :Return
+sTXTY : !s{TX,0,MXX,TY,0,MYY} :Return
+
+
+
+
+
+CNIF #DF=1
+Statement Text {x,yq.q,t$}
+  WLocate x*8,yq*8 : Print t$
+  End Statement
+Statement CText {c,x,yq.q,t$}
+  WColour c : WLocate x*8,yq*8 : Print t$
+  End Statement
+Statement USText {c,x,yq.q,v.b}
+  If v<0
+    w = v+256 Else
+    w = v    :EndIf
+  CText {c,x,yq,UStr$(w)}
+  End Statement
+CELSE
+Statement Text {x,y,t$}
+  WLocate x*8,y*8 : Print t$
+  End Statement
+CEND
+
+.Procedures
+Function.s FN {fn$}
+  v1=0
+
+  Repeat
+    ee = ev
+    ev = v1
+    v1 = Instr(fn$,":",ev+1)
+  Until v1=0
+  Function Return Right$(fn$,Len(fn$)-ee)
+End Function
+
+Statement RBox {}
+  !globals
+  SHARED x1,y1,x2,y2,w,h
+
+  Free Shape #GAS
+  GetaShape #GAS,x1-4,y1-4,w+32,h+32
+  Boxf x1-4,y1-4,x2+4,y2+4,C2
+  Boxf x1-1,y1-1,x2+1,y2+1,C0
+  Line x1-3,y2+4,x2+4,y2+4,C1:Line x2+4,y1-3,C1
+  Line x2+3,y1-4,x1-4,y1-4,C3:Line x1-4,y2+3,C3
+  End Statement
+  ; Store grfx, draw req.borders
+
+Statement BBox {}
+  !globals
+  SHARED x1,y1,x2,y2,w,h
+
+  Boxf x1-4,y1-4,x2+4,y2+4,0
+  Blit #GAS,x1-4,y1-4
+  End Statement
+  ; Restore grfx
+
+Function.w US {v.b}
+  !globals
+  If v<0
+    w.w = v+256 Else
+    w.w = v    :EndIf
+  Function Return w
+  End Function
+  ; Returns unsigned value, hopefully...
+
+Function.l OpenGList{glist}
+  *windowptr.window      = Addr Window     (0)
+  *gadgetsptr.gadgetlist = Addr GadgetList (glist)
+  ret.l = AddGList_(*windowptr\_window,*gadgetsptr\_gadgets,-1,-1,0)
+  ret.l = RefreshGList_(*gadgetsptr\_gadgets,*windowptr\_window,0,-1)
+  ret.l = ActivateWindow_(*windowptr\_window)
+  Function Return ret
+End Function
+
+Function.l CloseGList{glist}
+  *windowptr.window      = Addr Window     (0)
+  *gadgetsptr.gadgetlist = Addr GadgetList (glist)
+  ret.l = RemoveGList_(*windowptr\_window,*gadgetsptr\_gadgets,-1)
+  InnerCls
+  Function Return ret
+End Function
+
+Function.w OptSel{glist}
+  Use Screen 0
+  Use Window 0
+  WindowInput 0
+  ShowScreen 0
+  ret = OpenGList {glist}
+  s = 0
+  Repeat
+    Repeat
+      ev.l = Event
+      a$   = Inkey$
+    Until (ev & 64)=64 OR (a$>"")
+    s = GadgetHit
+  Until s
+  If a$>""
+    s = 1 :EndIf
+  ret = CloseGList {glist}
+  Function Return s
+  End Function
+
+Function.s Req {t$,ml}
+  !globals
+  SHARED x1,y1,x2,y2,w,h
+
+  ad$  = String$("W",ml+1)
+  W1.l = Len(t$)*8
+  W2.l = Len(ad$)*8
+  w    = W1+W2
+  h    = #FYS
+  x1   = SXA+(WGX-w)/2
+  y1   = SYA+(WGY-h)/2
+  x2   = x1+w
+  y2   = y1+h
+  RBox {}
+  WColour C3
+  WLocate x1,y1
+  Print t$
+  q$ = Edit$ (ml)
+  BBox {}
+  Function Return q$
+  End Function
+  ; String requester
+
+.Vgrfx
+Statement Vgrfx {x,y}
+  !globals
+
+  vZ = H(vT)\HNum
+  x0 = 2*x
+  y0 = 2*y+1-(x & 1)
+  Use BitMap #ZBM
+  Use BitMap #MBM : Plot x,y,vC
+  Use BitMap #ZBM : Blit #Ztr_Sps+vZ,x0,y0,0 : If vU>0 : Plot x0,y0,vC :EndIf
+  If y=0 : y0 = MYY*2 : Blit #Ztr_Sps+vZ,x0,y0,0 : If vU>0 : Plot x0,y0,vC :EndIf :EndIf
+  Use BitMap #GBM
+  !GCalc{x,y,x0,y0}
+  x1 = WXd(Z)+zx*(Z+1)
+  y1 = WYd(Z)+zy*(Z+1)+1-(zx & 1)*Z+Z
+  !c{x1,WXw(Z),WXr(Z),MXX*(Z+1),y1,WYw(Z),WYr(Z),MYY*(Z+1)}
+  If x1=>WXw(Z) AND y1=>WYw(Z) AND x1<WXr(Z) AND y1<WYr(Z)-Z
+    If Z=0
+      Plot x1,y1,vC
+    Else
+      Blit #Ztr_Sps+vZ,x1,y1,0
+      If vU>0 : Plot x1,y1,vC :EndIf
+    EndIf
+  EndIf
+  !Ch{x0,y0}
+    !HexBlit {vT,vU,1}
+  EndIf
+  End Statement
+  ; VisionizeBlit single hex
+
+
+MSRestore
+Statement MSRestore {p}
+  !globals
+
+  Use BitMap #MBM : Cls 0
+  Use BitMap #ZBM : Cls 0
+  Use BitMap #GBM : Boxf WXA,WYA,WXB-1,WYB-1,0
+  yl=0
+  For x=0 To MXX-1
+    yl=1-yl
+    For y=0 To MYY-1
+      Use BitMap #MBM : Plot x,y,H(M(x,y,p)\HX)\Color
+      Use BitMap #ZBM : Blit #Ztr_Sps+H(M(x,y,p)\HX)\HNum,2*x,2*y+yl
+    Next
+  Next
+  yl=0
+  For x=0 To MXX-1
+    yl=1-yl
+    Use BitMap #ZBM : Blit #Ztr_Sps+H(M(x,0,p)\HX)\HNum,2*x,2*MYY+yl
+  Next
+  Use BitMap #GBM
+End Statement
+
+
+
+CNIF #GM=1
+Statement Msg {t$}
+  !globals
+
+  Boxf PNX(0),MSY,PNX(4)-1,MSY+#FYS-1,CS
+  FNSPrint 1,PNX(0),MSY,t$,0,MC
+  End Statement
+  ; Message to InfoPanel
+
+Function.q D {x0,y0,x1,y1}
+  !globals
+
+  !s{x0,0,MXX,y0,0,MYY}
+  !s{x1,0,MXX,y1,0,MYY}
+  DX = x1-x0
+  DY = y1-y0 : !c{DX,-MPX,MPX,MXX,DY,-MPY,MPY,MYY}
+  If x0 & 1
+    yl = 2  Else
+    yl = 0 :EndIf
+  If DX & 1
+    dy.q = Abs(2*DY-1+yl)/2 Else
+    dy.q = Abs(2*DY)/2     :EndIf
+  dx.q = Abs(DX)
+  If dx>dy*2
+    d.q = dx Else
+    d.q = dy+dx/2 :EndIf
+  Function Return d
+  End Function
+  ; Calc distance
+
+Statement Delay {DEL.l}
+  !globals
+
+  ResetTimer
+  Repeat
+    A$ = Inkey$
+    MB = Joyb(0)
+    If A$>"" : exit = True :EndIf
+  Until exit=True OR Timer>DEL OR MB>0
+  End Statement
+  ; Wait
+
+Statement SMsg {t$,c}
+  !globals
+  SHARED x1,y1,x2,y2,w,h
+
+  W1.w=FNSLength(1,t$)
+  w  = W1
+  h  = #FYS
+  x1 = SXA+(WGX-w)/2
+  y1 = SYA+(WGY-h)/4*3
+  x2 = x1+w
+  y2 = y1+h
+  RBox {}
+  FNSPrint 1,x1,y1,t$,0,c
+  Repeat
+  Until Inkey$>""
+  BBox{}
+  End Statement
+  ; Render message over MainView
+
+Statement Explo {x,y}
+  !globals
+
+  If AUDIO
+    Poke.w Addr Sound(7)+4,1000
+    Sound 7,15,63,63,63,63 :EndIf
+  !GCalc{x,y,x0,y0}
+  !Ch{x0,y0}
+    n = 0
+    While n<7 AND exit=False
+      BBlit 0,#Xpl_Sps+n,x0,y0,0
+      Delay_(1)
+      n + 1
+      If Inkey$>"" : exit = True :EndIf
+      UnBuffer 0
+    Wend
+  EndIf
+  End Statement
+  ; Animate Explosion
+
+Slide
+Statement Slide {X0,Y0,X1,Y1,T,s}
+  !globals
+
+  If X0<>X1 OR Y0<>Y1
+    t = T MOD #UM
+    c = T/#UM
+    !GCalc{X0,Y0,x0.q,y0.q}
+    !Ch{x0,y0}
+      !HexBlit{vT,vU,1}
+      BBlit 0,#Unt_Sps+t,x0,y0,c
+      !GCalc{X1,Y1,x1.q,y1.q}
+      !Ch{x1,y1}
+        dx.q = x1-x0
+        dy.q = y1-y0
+        M    = Sqr(dx*dx+dy*dy)/s
+        If M<>0
+          dx / M
+          dy / M
+        EndIf
+        Repeat
+          VWait
+          UnBuffer 0
+          x0 + dx
+          y0 + dy
+          M  - 1
+          BBlit 0,#Unt_Sps+t,x0,y0,c
+          If Inkey$<>"" : exit = True :EndIf
+        Until M<=0
+      EndIf
+    EndIf
+  EndIf
+  End Statement
+  ; Slide UnitIcon
+
+.CRep
+USEPATH I(Rep_U,Rep_P)
+Statement CRep {x,y,R}
+  !globals
+  SHARED Rep_X,Rep_Y,Rep_P,Rep_U,REP
+
+  ui = M(x,y,0)\UI
+  If ui<>0
+    ut = ui MOD #UM
+    If ut<#MP
+      p2 = p2(ui/#UM+1)     Else
+      p2 = mpi_rev(ut-#MP) :EndIf  Else  p2 = 0 :EndIf
+
+  If p2<>0 AND p2<>p2(B)
+    For p=0 To Players-1
+
+      If p<>P
+        If (p2 & p2(p+1))<>0 AND M(x,y,0)\UI<>0 AND ((RepFlag & p2(p+1))=0)
+
+          V = False
+          u = 0
+          Repeat
+            If I(u,p)\X=x AND I(u,p)\Y=y AND I(u,p)\Com<>#C_TRANSPORT
+              If U(I(u,p)\T)\Vision[\Level]=>R
+                V = True
+                If I(u,p)\Com=#C_SENTRY : I(u,p)\Com=0 :EndIf
+              EndIf
+            EndIf
+            u+1
+          Until u>P(p)\unts
+
+          If V
+            RepFlag = RepFlag OR p2(p+1)
+            If P(p)\cmbs>#Reps
+              Msg{"Rep. Limit"} Else
+              P(p)\cmbs + 1    :EndIf
+            r = P(p)\cmbs
+            R(r,p)\Rep = REP
+            R(r,p)\Fac = \Factory
+            R(r,p)\Prd = \ProdNo
+            R(r,p)\X  = \X
+            R(r,p)\Y  = \Y
+            R(r,p)\HX = M(\X,\Y,0)\HX
+            R(r,p)\UI = M(\X,\Y,0)\UI
+            R(r,p)\x  = Rep_X
+            R(r,p)\y  = Rep_Y
+            R(r,p)\hx = M(Rep_X,Rep_Y,0)\HX
+            R(r,p)\ui = M(Rep_X,Rep_Y,0)\UI
+            If\T=0AND REP=1:Msg{UStr$(Rep_U)+":"+UStr$(Rep_P)+"!!!"}:Delay_(500):EndIf
+            R(r,p)\T  = \T+#UM*Rep_P
+          EndIf
+        EndIf
+      EndIf
+    Next
+  EndIf
+
+  End Statement
+  ; Check event to possible report
+
+Unitlist
+USEPATH I(u,p)
+Statement Unitlist {x,y,L}
+  !globals
+
+  hP(0,L) = -1
+  hS(L)   = -1
+  hI(L)   =  0
+
+  ui = M(x,y,0)\UI
+  If ui<>0
+    ut = ui MOD #UM
+    If ut<#MP
+      p2 = p2(ui/#UM+1)     Else
+      p2 = mpi_rev(ut-#MP) :EndIf
+
+    For p=0 To Players-1
+      If (p2(p+1) & p2)<>0
+        For u=0 To P(p)\unts
+          If \X=x AND \Y=y AND \Com<>#C_TRANSPORT
+            hS(L)       + 1
+            hP(hS(L),L) = p
+            hN(hS(L),L) = u
+            hI(L)       = hI(L) OR p2(U(\T)\BType)
+          EndIf
+        Next
+      EndIf
+    Next
+  EndIf
+  End Statement
+  ; List units in this hex
+
+.Cui
+Statement Cui {x,y,CMode,p,t}
+  !globals
+
+  b  = p+1
+  b2 = p2(b)
+  ui = M(x,y,0)\UI
+  If ui<>0
+    ut = ui MOD #UM
+    If ut<#MP
+      p2 = p2(ui/#UM+1)     Else
+      p2 = mpi_rev(ut-#MP) :EndIf  Else  p2 = 0 :EndIf
+
+  If CMode=#CADD
+    If p2=0                           ; Previously Empty
+      UI = t +p*#UM
+    Else
+      If p2=b2                        ; Single Player
+        ut = ui MOD #UM
+        If ut<#LU                     ; Only One Other
+          UI = bti( p2(U(ut)\BType) | p2(U(t)\BType) ) +p*#UM
+        Else
+          If ut<#MT                   ; One Leveled Other
+            UI = bti( p2(U( lui_rev(ut-#LU) )\BType) | p2(U(t)\BType) ) +p*#UM
+          Else
+            If ut<#HC                 ; Multiple MoveTypes
+              UI = bti( bti_rev(ut-#MT) | p2(U(t)\BType) ) +p*#UM
+            Else                      ; City
+              UI = ui
+            EndIf
+          EndIf
+        EndIf
+      Else                            ; MultiPly Add
+        UI = mpi (p2 & b2)
+      EndIf
+    EndIf
+  EndIf
+
+  If CMode=#CREM
+    If p2=b2                          ; SinglePly
+      If ut<#MT                       ; Only Unit
+        UI = 0
+      Else
+        If ut<#HC                     ; Multiple BattleType
+          UI = bti( bti_rev(ut-#MT) & NOT p2(U(t)\BType) )
+          If UI<#MT
+            UI = 0
+            u  = 0
+            Repeat
+              If \X=x AND \Y=y AND \Com<>#C_TRANSPORT
+                If \Level>0
+                  UI = #LU+U(\T)\LUI +p*#UM
+                Else
+                  UI = \T + p*#UM
+                EndIf
+              EndIf
+              u+1
+            Until UI<>0 OR u>P(p)\unts
+          EndIf
+        Else                          ; City
+          If t=>#F0 AND t<=#F1        ; This MUST be alone if Kill!
+            UI = 0
+          Else
+            UI = ui
+          EndIf
+        EndIf
+      EndIf
+    Else                              ; MultiPly
+      UI = mpi_rev( mpi(ut-#MP) & NOT b2 )
+      If UI=>90                       ; Single Player left
+        bti = 0
+        p = UI-90
+        For u=0 To P(p)\unts
+          If \X=x AND \Y=y AND \Com<>#C_TRANSPORT
+            If \Level>0
+              UI = #LU+U(\T)\LUI +p*#UM
+            Else
+              UI = \T +p*#UM
+            EndIf
+            bti | p2( U(\T)\BType )
+          EndIf
+        Next
+        If bti(bti)>5
+          UI = bti(bti)
+        Else
+          If bti(bti)=5
+            UI = #HC + (M(x,y,0)\HX-#T_CITY) +p*#UM
+          EndIf
+        EndIf
+      Else                            ; MultiPly
+        UI + #MP
+      EndIf
+    EndIf
+  EndIf
+
+  If CMode=#CLEV
+    If ut<#MT                         ; A lone Unit
+      UI = t +p*#UM
+    Else
+      UI = ui                         ; Others too
+    EndIf
+  EndIf
+
+  If CMode=#CCIT
+    UI = #HC + (M(x,y,0)\HX-#T_CITY) +p*#UM
+  EndIf
+
+  M(x,y,0)\UI = UI
+  End Statement
+  ; Calc & correct UnitIcon
+
+Statement UnitKill {u,p,P,v}
+  !globals
+
+  t      = I(u,p)\T
+  KillOk = True
+  If t=>#F0 AND t=#F1
+    For u0=0 To P(p)\unts
+      If I(u0,p)\X=I(u,p)\X AND I(u0,p)\Y=I(u,p)\Y AND I(u0,p)\Com<>#C_TRANSPORT AND u0<>u
+        KillOk = False
+      EndIf
+    Next
+    If KillOk
+      P(p)\facs - 1
+    EndIf
+  EndIf
+
+  If KillOk
+;    P(p)\act  [t] - 1                ; Update Stats
+;    P(p)\lost [t] + 1
+;    P(P)\kills[t] + 1
+    If I(u,p)\Cargo>0 AND U(I(u,p)\T)\Cargo<>0    ; Kill Cargo, too
+      l = 0
+      Repeat
+        If I(l,p)\Carrier=\ProdNo AND I(l,p)\Com=#C_TRANSPORT : UnitKill {l,p,P,v} :EndIf
+        l+1
+      Until l>P(p)\unts
+    EndIf
+    x  = I(u,p)\X
+    y  = I(u,p)\Y
+    h0 = &I(P(p)\unts,p)\T
+    h1 = &I(P(p)\unts,p)\L
+    h2 = &I(u,p)\T
+    For ca=h0 To h1
+      Poke.b h2,Peek.b(ca) : h2 + 1
+      Poke.b ca,0
+    Next
+    P(p)\unts - 1
+    Cui {x,y,#CREM,p,t}
+    If v
+      !s{x,0,MXX,y,0,MYY}
+      vT = M(x,y,0)\HX
+      vU = M(x,y,0)\UI
+      If vU=0 OR vU=#SH OR vU=#SH+1
+        vC = H(vT)\Color Else
+        vC = vU/#UM*4+3 :EndIf
+      M(x,y,B)\HX = vT
+      M(x,y,B)\UI = vU
+      Vgrfx {x,y}
+    EndIf
+  EndIf
+  End Statement
+  ; Remove unit from list
+
+.Visionize
+Statement Visionize {x,y,r}
+  !globals
+
+  z = Z+1
+  vT = M(x,y,0)\HX
+  vU = M(x,y,0)\UI : ir = vU MOD #UM
+  If r>IR(ir)
+    vu = M(x,y,B)\UI
+    If vu=#SH OR vu=#SH+1 OR vu=#SH-1
+      vU = 0   Else
+      vU = vu :EndIf :EndIf
+  M(x,y,B)\HX = vT
+  M(x,y,B)\UI = vU
+  If vU=0 OR vU=#SH OR vU=#SH+1 OR vU=#SH-1
+    vC = H(vT)\Color
+  Else
+    vp = vU/#UM
+    If vp<>P
+      For u=0 To P(vp)\unts
+        If I(u,vp)\X=x
+          If I(u,vp)\Y=y
+            If I(u,vp)\Com<>#C_TRANSPORT
+              I(u,vp)\Vis = True
+            EndIf
+          EndIf
+        EndIf
+      Next
+    EndIf
+    vC = vp*4+3
+  EndIf
+  Vgrfx {x,y}
+End Statement
+CEND
+
+.HexCircle
+Statement HexCircle {s,px,py,R,pR}
+  !globals
+  SHARED MSC,b0,b1,b2,b3,b4,b5,b6,b7,b8,b9,TX,TY,dst,dst1
+  SHARED Rep_X,Rep_Y,Rep_P,Rep_U,REP,RepSFlag
+  SHARED KED,Brush,ReCorr,CorPly,cT
+
+  If px & 1
+    HCL = -1  Else
+    HCL =  0 :EndIf
+  Repeat
+    R  + 1
+    hi = 1
+    Repeat
+      x = px+c(hi,R)\x
+      y = py+c(hi,R)\y
+      If c(hi,R)\l AND HCL : y-1 :EndIf
+      !sxy
+
+      If RepSFlag=0
+        CorPly = B  Else
+        CorPly = 0 :EndIf
+
+      If s=#HC_MS_CORR
+        USEPATH M(x,y,CorPly)
+        h = \HX
+        m = h-#Mul_ofs
+        For i=0 To #Multis-1 : If m(i)\a=h : m = i*64 :EndIf :Next
+        If m=>0
+          m / 64
+          b0 = #Mul_ofs+m*64-1
+          b1 = b0+65
+          b8 = m(m)\b-1
+          b9 = m(m)\c+1
+          d  = m(m)\d
+          e  = m(m)\e
+          If NOT d
+            b2 = #Mul_ofs+(d*64)-1
+            b3 = b2+65 Else
+            b2 = 0
+            b3 = 0    :EndIf
+          If NOT e
+            b4 = #Mul_ofs+(e*64)-1
+            b5 = b4+65 Else
+            b4 = 0
+            b5 = 0    :EndIf
+          If NOT m(m)\f
+            b6 = m(m)\f-1
+            b7 = m(m)\g+1 Else
+            b6 = 0
+            b7 = 0    :EndIf
+          If x & 1
+            yl = -1 Else
+            yl =  0:EndIf
+          cT = b0+1
+          HexCircle {#HC_MS_CALC,x,y,0,1}
+
+          If RepSFlag=0
+            cT = H(cT)\Mult
+            cU = \UI
+            !GCalc{x,y,x0,y0}
+            !Ch{x0,y0}
+              !HexBlit {cT,cU,1}
+            EndIf
+          EndIf
+
+          CNIF #ED=1
+          If KED
+            If H(MSC)\Mult<>0
+              cT     = H(cT)\Mult
+              ReCorr = True
+              vC     = H(cT)\Color
+              vT     = cT
+              vU     = 0
+              Vgrfx {x,y}
+            Else
+              !GCalc{x,y,x0,y0}
+              !Ch{x0,y0}
+              !HexBlit {cT,0,1}
+              EndIf
+            EndIf
+          EndIf
+          CEND
+
+
+
+
+          \HX = cT
+        EndIf
+      EndIf
+
+      CNIF #ED=1
+      If s=#HC_SUB_MAP_ED
+        vC  = H(Brush)\Color
+        \HX = Brush
+        vT  = \HX
+        vU  = 0
+        Vgrfx {x,y}
+      EndIf
+      CEND
+
+      CNIF #GM=1
+      USEPATH I(U0,P)
+
+      If s=#HC_SUB_MOVE_TO
+        dst1 = D{x,y,\CX,\CY}
+        If dst1<dst
+          TX  = x
+          TY  = y
+          dst = dst1 :EndIf
+      EndIf
+
+      If s=#HC_SUB_LOAD
+        If (U(I(U0,P)\T)\Specials & #SA_NPRCH_UNLOAD)=0 OR R=0
+          Unitlist {x,y,1}
+          For n=0 To hS(1)
+            p = hP(n,1)
+            If p=P
+              u = hN(n,1)
+              t = I(u,P)\T
+              If I(u,P)\Com=#C_LOAD_PREP
+                CC_FIT = (\Cargo + U(t)\Hits/3 <= U(\T)\Cargo)
+                CT_FIT = ((U(\T)\CType & U(t)\MType) > 0)
+                LS_FIT = (\Loading < U(\T)\Loading)
+                If CC_FIT AND CT_FIT AND LS_FIT
+                  I(u,P)\Carrier = \ProdNo
+                  I(u,P)\Com = #C_TRANSPORT
+                  \Cargo     + U(t)\Hits/4
+                  \Loading   + 1
+                  Cui {x,y,#CREM,P,I(u,P)\T}
+                  TX = x
+                  TY = y
+                  Visionize {x,y,0}
+                  Msg{"Loaded"}
+                Else
+                  If NOT CC_FIT:Msg{"No Space"}  :Delay_(20):EndIf
+                  If NOT LS_FIT:Msg{"Load Limit"}:Delay_(20):EndIf
+                EndIf
+              EndIf
+            EndIf
+          Next
+        EndIf
+
+      EndIf
+
+      If s=#HC_VISIONIZE : Visionize {x,y,R} :EndIf
+      If s=#HC_REPORT    : CRep {x,y,R}      :EndIf
+
+      CEND
+
+      If s=#HC_MS_CALC
+        H = M(x,y,CorPly)\HX : If H=0 : H = M(x,y,0)\HX :EndIf
+        If(H>b8AND H<b9)OR(H>b0AND H<b1)OR(H>b2AND H<b3)OR(H>b4AND H<b5)OR(H>b6AND H<b7)
+          cT + p2(hi-1)
+        EndIf
+      EndIf
+
+      hi + 1
+    Until hi>c(0,R)\x
+  Until R=>pR
+
+End Statement
+
+
+
+
+
+
+
+
+
+
+.Init_II                              ; Init Grfx & Sfx etc
+  RTEZSetPattern 0,""
+  CNIF #GM=1
+  ret = InstallFNS(1,?Font1)          ; Install Fonts
+  ret = InstallFNS(2,?Font2)
+  CEND
+
+  C0 = 6                              ; Dark
+  C1 = 14                             ;  .
+  C2 = 13                             ;  .
+  C3 = 1                              ;  .
+  C4 = 3                              ; Bright
+  CY = 7                              ; Yellow
+  CR = 15                             ; Red
+  CB = 11                             ; Blue
+  CS = 10                             ; Background
+  SBP = 4                             ; BitPlanes
+
+  Gosub Positioning                   ; Layout
+
+  Borders On                          ; Gadget Definitions
+  BorderPens 2,1
+  GadgetPens 1,0 : #y=12
+  CNIF #GM=1
+  TextGadget 1,8,2*#y,0,1," New Battle      "
+  TextGadget 1,8,3*#y,0,2," Load Old Battle "
+  TextGadget 1,8,4*#y,0,3," Information     "
+  TextGadget 1,8,5*#y,0,4," Preferences     "
+  TextGadget 1,8,6*#y,0,5," Some Help       "
+  TextGadget 1,8,7*#y,0,6," Editors         "
+  TextGadget 1,8,8*#y,0,7," Quit "
+  TextGadget 2,8,3*#y,0,1," Main "
+  TextGadget 3,8,5*#y,0,1," Continue        "
+  TextGadget 3,8,6*#y,0,2," Save & Continue "
+  TextGadget 3,8,7*#y,0,3," Save & Quit     "
+  TextGadget 3,8,8*#y,0,4," Quit "
+  TextGadget 4,8,2*#y,1,1," Disable Audio   "
+  TextGadget 4,8,3*#y,1,2," Lefty InfoPanel "
+  TextGadget 4,8,4*#y,1,3," Panel Buttons   "
+  TextGadget 4,8,5*#y,0,4," Main "
+  CEND
+  CNIF #ED=1
+  TextGadget 5,8,2*#y,0,1," Map Editor  "
+  TextGadget 5,8,3*#y,0,2," Load Map    "
+  TextGadget 5,8,4*#y,0,3," Save Map    "
+  TextGadget 5,8,5*#y,0,4," Hex Editor  "
+  TextGadget 5,8,6*#y,0,5," Unit Editor "
+  TextGadget 5,8,8*#y,0,6," Main "
+  CNIF #DF=0
+  Disable 5,4:Disable 5,5
+  CEND
+  CELSE
+  CNIF #GM=1
+  Disable 1,6
+  CEND
+  CEND
+
+  CNIF #GM=1
+  CNIF #HE=0                          ; Disable help if not in use
+  Disable 1,5
+  CEND
+  CNIF #AU=1                          ; Sfx Init
+  LoadSound 0,S$+"deep"
+  LoadSound 1,S$+"march"
+  LoadSound 2,S$+"gnd"
+  LoadSound 3,S$+"air"
+  LoadSound 5,S$+"sea"
+  LoadSound 7,S$+"xpl4"
+  LoadSound 8,S$+"uwd"
+  LoadSound 10,S$+"mechinf"
+  LoadSound 18,S$+"motor0"
+  LoadSound 19,S$+"chop1"
+  CELSE
+  Disable 4,1
+  CEND
+  Buffer 0,8192
+  CEND
+
+  LoadPalette #GPAL,D$+"Palette.Iff"
+  Gosub DefsLoad
+
+  ; Leftfield / Original
+  If ReadFile(0,D$+"Sps_Def")
+    FileInput 0
+    For h=0 To #HTypes-1
+      H(h)\Color=Cvi(Edit$(2))
+    Next
+    CloseFile 0
+  EndIf
+
+  LoadShape  #Ztc_Sps                   ,D$+"Ztc_Sps" ; Cookie 2x2 pixel
+  LoadShapes #Ztr_Sps,#Ztr_Sps+#HTypes-1,D$+"Ztr_Sps" ; -
+  LoadShape  #Coo_Sps                   ,D$+"Coo_Sps" ; Cookie HexPiece
+  LoadShapes #grd_Sps,#Grd_Sps          ,D$+"Grd_Sps" ; OwnCookie
+  LoadShapes #Ter_Sps,#Ter_Sps+#ters    ,D$+"Ter_Sps" ; -
+  LoadShapes #Vgr_Sps,#Vgr_Sps+#tw-1    ,D$+"Vgr_Sps" ; OwnCookie
+  CNIF #GM=1
+  LoadShapes #Xpl_Sps,#Xpl_Sps+7-1      ,D$+"Xpl_Sps" ; OwnCookie
+  LoadShapes #Unt_Sps,#Unt_Sps+#UM-1    ,D$+"Unt_Sps" ; OwnCookie
+  LoadShapes #Pnl_Sps,#Pnl_Sps+5-1      ,D$+"Pnl_Sps" ; OwnCookie
+  CEND
+
+
+
+  Cookie = Peek.l (Addr Shape (#Ztc_Sps)+18)  ; Copy Cookies
+  s      = #Ztr_Sps
+  ss     = #HTypes-1
+  Gosub CopyCookie
+  Cookie = Peek.l (Addr Shape (#Coo_Sps)+18)
+  s      = #Ter_Sps
+  ss     = #ters
+  Gosub CopyCookie
+
+
+
+
+
+  BitMap #MBM,#MMX,#MMY+2,SBP         ; Init bitmaps for ply she
+  BitMap #ZBM,2*#MMX,2*#MMY+4,SBP
+
+  Gosub MkScr                         ; Open screen
+  Gosub MiscDefs                      ; Initialize Misc. Definitions
+
+  CNIF #GM=1
+  CNIF #HE=1                          ; Get HelpScreen
+   Screen 2,0,0,320,256,4,$0000,"",0,0
+   ShowScreen 0
+   LoadScreen 2,D$+"Help.Iff",#HPAL
+   Use Screen 2 : Use Palette #HPAL
+  CEND
+  CEND
+  Return
+
+
+
+
+
+
+Rs                                    ; Frees UserCookieShapes
+  s=#Ztr_Sps:ss=#HTypes-1:Gosub FreeCopyCookie
+  s=#Ter_Sps:ss=#ters:Gosub FreeCopyCookie
+  Use Screen 1
+  CloseWindow 1
+  CloseScreen 1
+  Use Screen 0
+  CloseWindow 0
+  Return
+
+CopyCookie                            ; Copy cookies
+  For sno=s To s+ss
+    Poke.l Addr Shape(sno)+18,Cookie
+  Next
+  Return
+FreeCopyCookie                        ; Free Cookie shapes
+  For sno=s To s+ss
+    Poke.l Addr Shape(sno)+18,0
+    Free Shape sno
+  Next
+  Return
+
+
+
+
+
+
+
+
+
+Positioning
+  If SYY<222 : SYY = 222 :EndIf
+  If SYY=256 : SYY = 258 :EndIf
+
+  CNIF #GM=1
+  !m{sp,"  "}
+  !m{hp,"HP "}
+  !m{mp,"MP "}
+  !m{fu,"FU "}
+  !m{rg,"RG "}
+  !m{xp,"XP "}
+  !m{sh,"SH "}
+  !m{z1,"00 "}
+  !m{z2,"00/00 "}
+  !m{z3,"00.00 "}
+  !m{ts,"M:00 B:00 T:00 "}
+  !m{air,"Air "}
+  !m{gnd,"Gnd "}
+  !m{sea,"Sea "}
+  !m{sup,"Sub "}
+
+  sp     = 1
+  PNX(0) = 0
+
+  l      = hp : !l{mp} : !l{fu} : !l{rg} : !l{xp} : !l{sh} : !l{HXX+2}
+  PNX(1) = l
+  PNX(2) = PNX(1)+z2
+  l      = air : !l{gnd} : !l{sea} : !l{sup}
+  PNX(3) = PNX(2)+l
+  l      = PNX(3)+z3 : !l{PNX(1)+ts}
+  PNX(4) = l
+
+  #HL = 0       : #HS = 2             ; Hex info Line
+  #TL = #HL+#HS : #TS = 9             ; Top Unit info Line
+  #BL = #TL+#TS : #BS = 9             ; Bottom Unit info Line
+
+  #LL = #BL+#BS                       ; Last info line
+  PGX = PNX(4)                        ; InfoPanel Width
+
+  CELSE
+  #LL = 22
+  PGX = 6*#HXX                        ; InfoPanel Width
+  CEND
+
+  PYH = #LL*#FYS                      ; InfoPanel HexGrid YPos
+  PGY = PYH+2*#HYY                    ; InfoPanel Height
+  WXX = (SXX-#HXX-PGX-1)/#HDX+1       ; Main View Width, Hexs
+  WYY = (SYY-#HDY)/#HYY               ; Main View Height, Hexs
+  WPX = WXX/2 : WXX = WPX*2           ; MainView Center Width Modifier, Hexs
+  WPY = WYY/2                         ; MainView Center Height Modifier, Hexs
+  WGX = (WXX-1)*#HDX+#HXX+1           ; MainView Pixel Width
+  WGY = WYY*#HYY+#HDY+1               ; MainView Pixel Height
+
+  If POS_LEFT
+    SXA = SXX-WGX                     ; MainView Left
+    SYA = 0                           ; MainView Top
+    PGX = SXA-1
+    PXX = 0                           ; InfoPanel Left
+    PYY = SYY-PGY                     ; InfoPanel Top
+    If PB                             ; MessageLine Top
+      PBY = PYY-2*#PNY                ; Panel Buttons Line
+      MSY = PBY-#FYS   Else
+      MSY = PYY-#FYS  :EndIf
+    WXA = 0                           ; MiniMapArea Left
+    WYA = 0                           ; MiniMapArea Top
+    WXB = PGX                         ; MiniMapArea Right
+    WYB = MSY-1                       ; MiniMapArea Bottom
+    CNIF #GM=1
+      PNX(4) = SXA-1
+    CEND
+  Else
+    SXA = 0
+    SYA = 0
+    MSY = PGY
+    PBY = MSY+#FYS
+    WXA = WGX
+    If PB
+      WYA = PBY+#PNY*2 Else
+      WYA = PBY       :EndIf
+    WXB = SXX-1
+    WYB = SYY-1
+    PXX = WGX
+    PYY = 0
+    CNIF #GM=1
+      PNX(4) = SXX-1
+    CEND
+  EndIf
+
+  CNIF #GM=1
+  For n=0 To 3                        ; Correct InfoPanel Positions
+    PNX(n) + PXX                      ;
+  Next                                ;
+  CEND
+
+  WMX = (WXB-WXA) & NOT 3             ; MiniMapArea Width
+  WMY = (WYB-WYA) & NOT 3             ; MiniMapArea Height
+  WXC = WMX/2                         ; MiniMapArea Center Width Modifier
+  WYC = WMY/2                         ; MiniMapArea Center Height Modifier
+  WXD = WXA+WXC                       ; MiniMapArea Center X-Position
+  WYD = WYA+WYC                       ; MiniMapArea Center Y-Position
+  WXE = SXA+WGX/2                     ; MainView Center Pixel X-Position
+  WYE = SYA+WGY/2                     ; MainView Center Pixel Y-Position
+
+  WXd(0) = WXD-WPX                    ; MiniMap X-Mod.: MainView Offset to MiniMapArea Center
+  WYd(0) = WYD-WPY-1                  ; MiniMap Y-Mod.:  -  "  -
+  WXd(1) = WXD-WXX                    ; ZoomedMiniMap X-Modifier
+  WYd(1) = WYD-WYY-1                  ; ZoomedMiniMap Y-Modifier
+  WXd(2) = WXE-WXX                    ; ZoomedMiniScrollMap X-Modifier
+  WYd(2) = WYE-WYY-1                  ; ZoomedMiniScrollMap Y-Modifier
+  WXd(3) = WXE-WXX*2                  ; ZoomedMiniScrollMap X-Modifier
+  WYd(3) = WYE-WYY*2-1                ; ZoomedMiniScrollMap Y-Modifier
+
+  CNIF #GM=1
+  Xi = PXX+((PNX(1)-PNX(0))-#HXX)/2   ; InfoPanel Unit List
+  Yi = PYY+((2*#FYS)-#HYY)/2          ;  Offsets
+  YI = PYY+PYH
+  CEND
+
+  MXX = #MMX                          ; Currect MapSize to Max.
+  MYY = #MMY
+  Gosub MapFit                        ; Calc Grfx Vars
+  Return
+
+
+
+
+
+MkScr                                 ; Open Screen etc.
+  DefaultIDCMP $400
+  Screen 1,0,0,SXX,SYY,SBP,id,"",15,1
+  ShowScreen 0
+  Window 1,0,0,SXX,SYY,$31840,"",0,0
+  ScreensBitMap 1,#GBM
+  AutoCookie On
+  Cls 0                               ; Draw & Grab borders
+  YL = #HDY
+  For Y=-1 To WYY
+    WBlit #grd_Sps,-#HDX,#HYY*Y
+    WBlit #grd_Sps,#HDX*WXX,#HDY+#HYY*Y
+  Next
+  For X=-1 To WXX
+    YL = #HDY-YL
+    WBlit #grd_Sps,#HDX*X,YL-#HYY
+    WBlit #grd_Sps,#HDX*X,YL+#HYY*WYY
+  Next
+  GetaShape #Grd_Sps,0,0,WGX-1,#HDY
+  GetaShape #Grd_Sps+1,WGX-#HDX,0,#HDX-1,WGY-1
+  GetaShape #Grd_Sps+2,0,WGY-#HDY-1,WGX-1,#HDY
+  GetaShape #Grd_Sps+3,0,0,#HDX,WGY-1
+  Use Screen 0 : Use Window 0
+  Return
+
+
+
+
+
+
+
+
+
+GameScreen                            ; Use GameScreen, MainView
+  FlushEvents
+  Use Screen 1
+  Use Window 1
+  *windowptr.window = Addr Window (1)
+  ret.l = ActivateWindow_(*windowptr\_window)
+  Menus Off
+  Use BitMap #GBM
+  Cls CS
+  CNIF #GM=1
+  FNSOutput #GBM,1
+  CEND
+  WindowInput 1
+  Use Palette #GPAL
+  ShowScreen 1
+  Return
+
+
+
+
+
+
+
+USEPATH M(PX,PY,B)
+Kartta                                ; Redraw MainView
+  LX = LX & NOT 1 : Gosub sLXLY
+  x0 = SXA
+  PX = LX
+  x=0
+  Repeat
+    !z{PX,0,MXX}
+    PY = LY
+    If x & 1
+      y0 = SYA  Else
+      y0 = #HDY:EndIf
+    y=0
+    Repeat
+      If PY=>MYY : PY - MYY :EndIf
+      !HexBlit {\HX,\UI,1}
+      y0 + #HYY
+      PY + 1
+      y+1
+    Until y=WYY
+    x0 + #HDX
+    PX + 1
+    x+1
+  Until x=WXX
+  Gosub MapFresh
+  Return
+
+
+
+
+
+SkrolTo                               ; Scroll to defined position
+  DX = TX-WPX-LX
+  DY = TY-WPY-LY
+  !c{DX,-MPX,MPX,MXX,DY,-MPY,MPY,MYY}
+
+Skrol                                 ; Scroll Delta
+  DX = DX & NOT 1
+  LX + DX
+  LY + DY
+
+  If Abs(DX)>WXX OR Abs(DY)>WYY
+    Gosub Kartta
+    Return :EndIf
+
+  GDX = DX*#HDX
+  GDY = DY*#HYY
+  Gosub sLXLY
+  If DX<>0
+    If DX>0
+      DX1 = WXX-DX
+      DX2 = WXX-1
+      YX1 = 0
+      YX2 = DX1-1
+    Else
+      DX1 = 0
+      DX2 = -DX-1
+      If DX2<WXX-1
+        YX1 = DX2+1
+        YX2 = WXX-1 Else
+        YX1 = WXX-1
+        YX2 = WXX-1:EndIf
+    EndIf
+  Else
+    YX1 = 0
+    YX2 = WXX-1
+  EndIf
+
+  If DY>0
+    DY1 = WYY-DY
+    DY2 = WYY-1 Else
+    DY1 = 0
+    DY2 = -DY-1:EndIf
+
+  rp.l = RastPort(Used Window)
+  sr.l = ScrollRaster_(rp,GDX,GDY,SXA,SYA,SXA+WGX-2,SYA+WGY-2)
+  Gosub Border
+
+  If DX<>0
+    x0 = SXA + DX1*#HDX
+    PX = LX+DX1
+    x=DX1
+    Repeat
+      PY = LY
+      If PX=>MXX : PX - MXX :EndIf
+      If x & 1
+        y0 = SYA  Else
+        y0 = #HDY:EndIf
+      y=0
+      Repeat
+        If PY=>MYY : PY - MYY :EndIf
+        !HexBlit {\HX,\UI,1}
+        y0 + #HYY
+        PY + 1
+        y+1
+      Until y=WYY
+      x0 + #HDX
+      PX + 1
+      x+1
+    Until x>DX2
+  EndIf
+
+  If DY<>0
+    x0 = SXA + YX1*#HDX
+    PX = LX+YX1
+    x=YX1
+    Repeat
+      PY = LY+DY1
+      If PX=>MXX : PX - MXX :EndIf
+      If x & 1
+        y0 = SYA+DY1*#HYY  Else
+        y0 = DY1*#HYY+#HDY:EndIf
+      y=DY1
+      Repeat
+        If PY=>MYY : PY - MYY :EndIf
+        !HexBlit {\HX,\UI,1}
+        y0 + #HYY
+        PY + 1
+        y+1
+      Until y>DY2
+      x0 + #HDX
+      PX + 1
+      x+1
+    Until x>YX2
+  EndIf
+  Gosub MapFresh
+  Return
+
+
+
+
+
+MapFresh                              ; Refresh MiniMapArea or ZoomedMiniScrollMap
+  If NOT Mapper : ZM = Z :EndIf
+
+  z  = Z + 1
+  yz = z / 2
+
+  MX = LX+WPX-WSX(ZM)/(2*z)
+  MY = LY+WPY-WSY(ZM)/(2*z) : !s{MX,0,MXX,MY,0,MYY}
+  x0 = MX*z
+  x1 = MX*z+WSX(ZM)
+  y0 = MY*z+yz
+  y1 = MY*z+yz+WSY(ZM)
+
+  If x1>MXX*z
+    x2 = 0
+    x3 = x1-MXX*z
+    x1 = MXX*z Else x3 = 0 :EndIf
+  If y1>MYY*z+yz
+    y2 = yz
+    y3 = y1-MYY*z
+    y1 = MYY*z+yz Else y3 = 0 :EndIf
+  Select Z
+    Case 0 : SRC = #MBM
+    Case 1 : SRC = #ZBM
+  End Select
+
+  x1 - x0
+  y1 - y0
+  If x3>0 : x3 - x2 :EndIf
+  If y3>0 : y3 - y2 :EndIf
+
+  If x0<0 OR y0<0 OR x2<0 OR y2<0 :Return :EndIf
+  If x1>WSX(ZM) : x1 = WSX(ZM) : x3 = 0 :EndIf
+  If y1>WSY(ZM) : y1 = WSY(ZM) : y3 = 0 :EndIf
+  xs = x1+x3
+  ys = y1+y3
+  If xs>WSX(ZM) : x3 = WSX(ZM)-x1 :EndIf
+  If ys>WSY(ZM) : y3 = WSY(ZM)-y1 :EndIf
+
+  Use BitMap #GBM
+  If ZM<3
+    Scroll x0,y0,x1,y1,WXw(ZM),WYw(ZM),SRC
+    If x3>0
+      Scroll x2,y0,x3,y1,WXw(ZM)+x1,WYw(ZM),SRC
+      If y3>0
+        Scroll x2,y2,x3,y3,WXw(ZM)+x1,WYw(ZM)+y1,SRC
+      EndIf
+    EndIf
+    If y3>0
+      Scroll x0,y2,x1,y3,WXw(ZM),WYw(ZM)+y1,SRC
+    EndIf
+  Else
+    x02=x0/2
+    y02=y0/2
+    x12=x1/2
+    y12=y1/2
+    x22=x2/2
+    y22=y2/2
+    x32=x3/2
+    y32=y3/2
+    av1=ADDValue(#ZBM,x02,y02)
+    av2=ADDValue(#GBM,WXw(ZM),WYw(ZM))
+    ZoomX2 #ZBM,#GBM,av1,av2,x12,y12
+    If x3>0
+      av1=ADDValue(#ZBM,x22,y02)
+      av2=ADDValue(#GBM,WXw(ZM)+x1,WYw(ZM))
+      ZoomX2 #ZBM,#GBM,av1,av2,x32,y12
+      If y3>0
+        av1=ADDValue(#ZBM,x02,y22)
+        av2=ADDValue(#GBM,WXw(ZM),WYw(ZM)+y1)
+        ZoomX2 #ZBM,#GBM,av1,av2,x12,y32
+        av1=ADDValue(#ZBM,x22,y22)
+        av2=ADDValue(#GBM,WXw(ZM)+x1,WYw(ZM)+y1)
+        ZoomX2 #ZBM,#GBM,av1,av2,x32,y32
+      EndIf
+    Else
+      If y3>0
+        av1=ADDValue(#ZBM,x02,y22)
+        av2=ADDValue(#GBM,WXw(ZM),WYw(ZM)+y1)
+        ZoomX2 #ZBM,#GBM,av1,av2,x12,y32
+      EndIf
+    EndIf
+  EndIf
+  Return
+
+
+
+
+
+MapFit                                ; Recalc Grfx Vars
+  MPX = MXX/2                         ; MiniMap Center Modifier
+  MPY = MYY/2
+  ZXX = 2*MXX                         ; Zoomed MiniMap Centre Modifier
+  ZYY = 2*MYY
+  If MXX<WMX                          ; MiniMap Vision Area
+    WSX(0) = MXX Else
+    WSX(0) = WMX:EndIf
+  If MYY<WMY
+    WSY(0) = MYY Else
+    WSY(0) = WMY:EndIf
+  If ZXX<WMX                          ; Zoomed MiniMap Vision Area
+    WSX(1) = ZXX Else
+    WSX(1) = WMX:EndIf
+  If ZYY<WMY
+    WSY(1) = ZYY Else
+    WSY(1) = WMY:EndIf
+  If ZXX<WGX-2*#HXX                   ; Zoomed MiniScrollMap Vision Areas
+    WSX(2) = ZXX Else
+    WSX(2) = WGX-2*#HXX:EndIf
+  If ZYY<WGY-2*#HYY
+    WSY(2) = ZYY Else
+    WSY(2) = WGY-2*#HYY:EndIf
+  If 2*ZXX<WGX-2*#HXX                 ; X4
+    WSX(3) = 2*ZXX Else
+    WSX(3) = WGX-2*#HXX:EndIf
+  If 2*ZYY<WGY-2*#HYY
+    WSY(3) = 2*ZYY Else
+    WSY(3) = WGY-2*#HYY:EndIf
+  For n=0 To 1                        ; Area Lefts, Tops, Rights & Bottoms
+    WXw(n) = WXD-WSX(n)/2
+    WYw(n) = WYD-WSY(n)/2
+    WXr(n) = WXD+WSX(n)/2
+    WYr(n) = WYD+WSY(n)/2
+  Next
+  For n=2 To 3
+    WXw(n) = WXE-WSX(n)/2
+    WYw(n) = WYE-WSY(n)/2
+    WXr(n) = WXE+WSX(n)/2
+    WYr(n) = WYE+WSY(n)/2
+  Next
+  WXw(3) & NOT 7
+  WXr(3) =(WXr(3) & NOT 7)-16
+  Return
+
+
+
+
+
+
+
+
+
+
+
+CNIF #GM=1
+InfoScreen
+  ret = OpenGList{2}
+  Text{2, 2,"Written by Timo Suoranta"}
+  Format "##0"
+  Text{2, 7,"Avail Chip Mem : "+UStr$(AvailMem_(2))}
+  Text{2, 9,"Hex Unit limit         : "+Str$(#Units_Hex)}
+  Text{2,10,"Player Unit limit      : "+Str$(#IUnits)}
+  Text{2,11,"Player Factory limit   : "+Str$(#FMax)}
+  Text{2,12,"Combat Report limit    : "+Str$(#Reps)}
+  Text{2,13,"Max number of Players  : "+Str$(#Ply_Max)}
+  Text{2,14,"Unit Move Speed        : "+Str$(MoveSpeed)}
+  Text{2,15,"Max Map Size       : "+Str$(#MMX)+","+Str$(#MMY)}
+  Repeat
+  Until WaitEvent=64
+  ret = CloseGList{2}
+  Return
+
+PrefsEd                               ; Preferences Editor
+  Toggle 4,1,NOT AUDIO
+  Toggle 4,2,POS_LEFT
+  Toggle 4,3,PB
+  ret = OpenGList{4}
+  Format "##0"
+
+  Repeat
+    Repeat
+    Until WaitEvent=64
+    s        = GadgetHit
+    AUDIO    = True - GadgetStatus(4,1)
+    POS_LEFT = GadgetStatus(4,2)
+    PB       = GadgetStatus(4,3)
+    If s=2 : Gosub Positioning :EndIf
+    If s=3 : Gosub Positioning :EndIf
+  Until s=4
+  ret = CloseGList{4}
+  Return
+
+CNIF #HE=1
+Help                                  ; Help Screen Viewer
+  ShowScreen 2
+  MouseWait
+  ShowScreen 0
+  Return
+CEND
+
+
+
+
+
+
+
+
+.MAIN                                 ; Main Game Selector
+  Repeat
+    s = OptSel {1} : InnerCls : WColour 1
+    Select s
+      Case 1 : CNIF #GM=1 : Gosub GameNew :CEND
+      Case 2 : CNIF #GM=1 : Gosub GameLoad : If IoOk : Gosub MapFit : !ad{P,1,0,Players-1} : Gosub ENGINE :EndIf :CEND
+      Case 3 : Gosub InfoScreen
+      Case 4 : Gosub PrefsEd
+      Case 5 : CNIF #HE=1 : Gosub Help :CEND
+      Case 6 : CNIF #ED=1 : Gosub EDITORS :CEND
+      Case 7 : WLocate 64,64 : Print "Bye!" : Gosub Rs :End
+    End Select
+ Forever
+
+
+
+
+.GameNew                              ; Starting Up New Game
+  RepSFlag = 1
+  If #Ply_Max>2
+    pl.l = RTEZGetLongRange("PowerBattle","Number of Players",2,#Ply_Max,2)
+    Players = pl Else
+    Players = 2 :EndIf
+
+  Gosub MapLoad : If NOT IoOk :Return :EndIf
+
+  For y=0 To MYY                      ; Clear Map from UnitIcons
+    For x=0 To MXX
+      M(x,y,0)\UI = 0
+    Next
+  Next
+
+  CCities.l = RTEZGetLongRange(Ver$,"Number of Coastal Cities ?",10,#CMax,50)
+  MCities.l = RTEZGetLongRange(Ver$,"Number of MainLand Cities ?",10,#CMax-CCities,50)
+  MinDist.l = RTEZGetLongRange(Ver$,"Minimal Distance ?",1,15,7)
+  TotalCities = CCities + MCities
+  Cities = 0                          ; Cities present
+
+  Format "####"                       ; Display
+
+  WLocate 10,20 : Print "Placing Cities, hit key to skip"
+  For t=1 To 2                        ; Place (1) Coastal (2) Mainland Cities
+    Select t
+      Case 1 : N = CCities : CSR=2
+      Case 2 : N = MCities : CSR=5
+    End Select
+
+    For n=0 To N-1
+      CityOk = False
+
+      Repeat                          ; Loop for Suitable Location
+        If Inkey$>""                  ; User Break; Cancel
+          Pop Repeat
+          Pop For
+          Goto CitiesDone :EndIf
+        x = Rnd(MXX)
+        y = Rnd(MYY)
+        h = M(x,y,0)\HX
+        If H(h)\CSize=CSR
+          CityOk = True
+          For i=0 To Cities           ; Check Distances
+            d = D{x,y,city(i)\x,city(i)\y}
+            If d<MinDist : CityOk=False :EndIf
+          Next
+        EndIf
+      Until CityOk
+
+      city(Cities)\x = x              ; Place City Here
+      city(Cities)\y = y,0
+      Cities + 1
+
+      R = 0
+      f = 0
+      Repeat
+        R  + 1
+        hi = 0
+        Repeat
+          hi + 1
+          Gosub CirPos
+          If H(M(X,Y,0)\HX)\CSize=6
+            M(X,Y,0)\HX = #T_FIELD
+            f + 1
+          EndIf
+        Until hi=c(0,R)\x OR f=6
+      Until R=3 OR f=6
+      M(x,y,0)\HX = #T_CITY+Rnd(4)
+
+      WLocate 10,30 : NPrint "Cities:"+Str$(t)+Str$(Cities)+"/"+Str$(TotalCities)
+    Next
+    CitiesDone                        ; User Break Label
+  Next
+  If Cities<CCities : CCities=Cities :EndIf
+
+  SCities = Cities/Players-5 : If SCities<1 : SCities=1 :EndIf
+  SCities = RTEZGetLongRange(Ver$,"Number of Starting Cities?",1,10,SCities)
+  STech.l = RTEZGetLongRange(Ver$,"Starting Techology Level ?",0,66,33)
+  TechF.l = RTEZGetLongRange(Ver$,"Technology factor ?",5,20,10)
+  ProdF.l = RTEZGetLongRange(Ver$,"Production factor ?",5,20,10)
+
+
+  WLocate 10,20 : Print "Placing Starts, hit key to confirm"
+  DST = 1
+  Repeat
+    a$ = Inkey$
+    For p=0 To Players-1 : pc(1,p) = Rnd(Cities-4)+2 :Next
+    dst = 32000
+    For p1=0 To Players-2
+      For p2=p1+1 To Players-1
+        c1=pc(1,p1)
+        c2=pc(1,p2)
+        dst1 = D{city(c1)\x,city(c1)\y,city(c2)\x,city(c2)\y}
+        If dst1<dst : dst=dst1 :EndIf
+      Next
+    Next
+    WLocate 10,30 : NPrint "Min. Distance:"+Str$(dst)+"\"+Str$(DST)
+    If dst>DST
+      DST = dst
+      For p=0 To Players-1 : pc(0,p) = pc(1,p) :Next
+    EndIf
+  Until a$<>""
+  InnerCls : WLocate 10,20 : Print "Sharing cities..."
+
+;  MMode.l = RTEZRequest(Ver$,"Map Mode","Hidden|Known")
+
+  USEPATH I(U0,P)
+  For P=0 To Players-1
+    For i=0 To 3 : P(P)\tech[i] = STech :Next
+    For x=0 To MXX
+;      If MMode=1
+        For y=0 To MYY
+          M(x,y,P+1)\HX = 0,#SH-1
+        Next
+;      Else
+;        For y=0 To MYY
+;          M(x,y,P+1)\HX = M(x,y,0)\HX,M(x,y,0)\UI
+;        Next
+;      EndIf
+    Next
+    For ca=&I(0,P)\T To &I(#IUnits-1,P)\L : Poke.b ca,0 :Next
+
+    P(P)\facs = -1
+    P(P)\unts = -1
+    P(P)\tous = -1
+    P(P)\cmbs =  0
+    P(P)\msgs =  0
+
+    C = pc(0,P)
+    X = city(C)\x
+    Y = city(C)\y
+
+    For n=1 To SCities
+
+      D = 32000
+      c = pc(0,P)
+
+      For i=0 To Cities
+        If city(i)\l=0
+          d = D{X,Y,city(i)\x,city(i)\y}
+          If d<D
+            D = d
+            c = i
+          EndIf
+        EndIf
+      Next
+
+      city(c)\l = 1
+      x = city(c)\x
+      y = city(c)\y
+
+      P(P)\facs + 1
+      P(P)\unts + 1
+      P(P)\tous + 1
+      U0 = P(P)\unts
+      FName$(P(P)\facs,P) = PName$(P)
+      M(x,y,0)\HX = #T_CITY
+      \Vet  = 10
+      \T    = #F0+M(x,y,0)\HX-#T_CITY
+      \X    = x
+      \Y    = y
+      \Com  = 0
+      \Hits = U(\T)\Hits
+      \TDef = U(\T)\TDef
+      \Fuel = 0
+      \Factory = 0
+      \ProdNo  = U0
+
+      P(P)\unts + 1
+      P(P)\tous + 1
+      U0 = P(P)\unts
+      \Vet  = 10
+      \T    = 1
+      \X    = x
+      \Y    = y
+      \Com  = 0
+      \Hits = U(\T)\Hits
+      \TDef = U(\T)\TDef
+      \Fuel = 0
+      \Factory = 0
+      \ProdNo  = U0
+
+      Cui{x,y,#CCIT,P,\T}
+
+      HexCircle{#HC_MS_CORR,x,y,0,4}
+
+    Next
+  Next
+
+  Turn     = 1
+  P        = 0
+  Map_Type = 0
+  InnerCls
+  Gosub ENGINE
+  Return
+
+GameEnd                               ; Ending Game - Nothing much yet...
+  Return
+
+
+
+
+
+USEPATH P(P)
+.ENGINE                               ; Loop Giving Turns to Players
+  Repeat
+
+    UNLOAD = False
+    KED    = False
+    SU     = True
+
+    For P=P To Players-1
+
+      B=P+1
+      If \unts=>0
+
+        WLocate 10,20 : Print "Next Player..."
+        MSRestore {B} : InnerCls
+
+        If Turn=1
+          PName$(p)=RTEZGetString("Welcome player "+UStr$(P+1),"Please Enter Your Name:",#StrLen)
+          PCode$(p)=RTEZGetString(PName$(P),"Please Enter Your Password:",#StrLen)
+        Else
+          Repeat
+            bodytext$="Turn "+UStr$(Turn)+" "+PName$(P)+Chr$(10)+Chr$(10)
+            bodytext$+"Please Enter Your Password"+Chr$(10)
+            bodytext$+"Q=Quit"
+            q$ = RTEZGetString("PowerBattle",bodytext$,#GnsLen)
+          Until q$=PCode$(P) OR q$="Q"
+          If q$="Q" : Pop For : Pop Repeat : Return :EndIf
+
+        EndIf
+
+        Gosub GameScreen
+        Cls CS
+        WOD = 0
+        Z   = 1
+        Gosub Border
+        Boxf PXX,PYY,PXX+PGX-1,PYY+PGY-1-#PNY,CS
+
+        If PB                         ; Panel buttons
+          Boxf PXX,PBY,PXX+8*#PNX,PBY+#PNY*2,0
+          Blit #Pnl_Sps,PXX,PBY
+        EndIf
+
+        P(P)\msgs = 0
+        PlyFlag   = 0
+        RepSFlag  = 0                 ; Reset Combat Report Shown
+        Movc      = \unts+1           ; Moves per Turn Limit Counter
+        GRD       = 0                 ; Reset Grid
+        SBT       = %1111             ; Show all BattleTypes
+
+        If Turn<Protection-1
+          Turns = (Protection-Turn)*4 Else
+          Turns = 1        :EndIf
+
+        Turns_Done=0
+        Repeat
+          Gosub MoveMode
+          \cmbs      = 0
+          Turns_Done + 1
+          For i=0 To 3 : P(P)\tech[i]+1 :Next
+        Until Turns_Done=>Turns OR \unts<0 OR A$="Q"
+
+        Cls CS
+        If A$="Q" : Pop For : Pop Repeat : Return :EndIf
+
+        ; Request End of Turn
+
+        s = OptSel {3}
+        If s=2 OR s=3
+          Quit = False
+          Repeat
+            Gosub GameSave
+            If IoOk=False
+              InnerCls : ioe.l = RTEZRequest(Ver$,"I/O Error","Cancel|Retry")
+            EndIf
+          Until IoOk=True OR ioe=1
+        EndIf
+        If s=3 OR s=4 :Pop For :Pop Repeat :Return :EndIf
+      EndIf
+
+      Lost = 0
+      For p=0 To Players-1
+        If P(p)\unts=-1 : Lost + 1 :EndIf
+      Next
+      If Lost>Players-2 :Pop For :Pop Repeat :Return :EndIf
+
+    Next
+    Turn + 1
+    P    = 0
+  Forever
+
+
+
+
+
+
+
+
+
+USEPATH I(U0,P)
+.MoveMode                             ; Calling Interface & Executing Orders
+  Gosub UnitUpdate ; Msg{""}
+  Gosub SelectFirstActive : A$ = ""
+
+  Repeat
+
+    Gosub UnitStatus
+    If P(P)\unts<0 : Return :EndIf
+
+    U0 = U
+
+    If (\Com=#C_MOVE_TO OR \Com=#C_BUILD_R_TO) AND AUTOMT : Gosub _MoveTo :!Eg
+    If \Com=#C_CAPTURE : ex=\X:ey=\Y:TX=ex:TY=ey : Gosub _Capture :EndIf
+
+    Gosub Interface ; Msg{""}
+
+    If NXTO=True AND MK=1
+      If \Com=#C_MOVE_TO OR \Com=#C_BUILD_R_TO : \Com = 0 :EndIf
+      Gosub _Move :!Eg
+    ;If A$="a" : DO_Attack = True Else DO_Attack = False :EndIf
+    DO_Attack = True
+
+    If MK=2 AND I=1
+      OWN = False
+      For n=0 To hS(1)
+        If hP(n,1)=P : OWN = True :EndIf
+      Next
+      If OWN=True
+        Gosub _SelectTarget
+      Else
+        If D>U(\T)\Range[\Level] OR (\Ammo=0 & U(\T)\Ammo>0)
+          Gosub _SelectNextActive Else
+          Gosub _RangedAttack    :EndIf
+      EndIf
+      Goto n
+    EndIf
+
+    If MK=1 AND I=1
+      If D>0 : com=#C_MOVE_TO : Gosub _MoveTo Else \Com=0 :Gosub PanelHexCom :EndIf :!Eg
+
+    If A$="H" : Gosub Hiding !Eg
+    If A$="o" : UMode = 0 : Gosub _Map :!Eg
+    If A$="p" : UMode = 1 : Gosub _Map :!Eg
+    If A$="u" : UMode = 2 : Gosub _Map :!Eg
+    If A$="s" : Gosub _SendMsg :!Eg
+    If A$="/" : Gosub _Capture :!Eg
+    If A$="\" : Gosub _Rename  :!Eg
+    If A$="9" : Gosub _SetReadyForLoading :!Eg
+    If A$="." : Gosub _SetSentry :!Eg
+    If A$="l" : Gosub _Load :!Eg
+
+    If A$="f"
+      ter = #T_FORTRESS               ; Terrain to be built
+      tim = 2                         ; Production Time
+      com = #C_BUILD                  ; Orders to be set
+      rcs = 5                         ; Required CSize
+      mcs = 9                         ; Max CSize
+      rsa = #SA_DO_FORTRESS           ; Required Special Ability
+      Gosub _Build :!Eg
+    If A$="r"
+      ter = #T_ROAD
+      tim = 0
+      com = #C_BUILD
+      rcs = 4
+      mcs = 9
+      rsa = #SA_DO_ROAD
+      Gosub _Build :!Eg
+    If A$="b"
+      ter = #T_BRIDGE
+      tim = 3
+      com = #C_BUILD
+      rcs = 2
+      mcs = 2
+      rsa = #SA_DO_BRIDGE
+      Gosub _Build :!Eg
+    If A$="R"
+      ter = #T_ROAD
+      tim = 0
+      com = #C_BUILD_R_TO
+      rcs = 4
+      mcs = 9
+      rsa = #SA_DO_ROAD
+      Gosub _Build :!Eg
+    If A$="P"
+      ter = #T_PLAIN
+      tim = 0
+      com = #C_BUILD
+      rcs = 4
+      mcs = 9
+      rsa = #SA_DO_PLAIN
+      Gosub _Build :!Eg
+    If A$="c"
+      ter = #T_FIELD
+      tim = 1
+      com = #C_BUILD
+      rcs = 4
+      mcs = 9
+      rsa = #SA_DO_FIELD
+      If H(M(\X,\Y,0)\HX)\CSize=4 : tim + 2 :EndIf
+      Gosub _Build :!Eg
+
+    If A$="K" : UnitKill {U0,P,P,True} : Gosub Killed :!Eg
+
+    If A$="0" : Gosub _SetTempSentry    :!Eg
+    If A$="8" : Gosub _SelectNextAKeep  :!Eg
+    If A$="7" : Gosub _SelectPrevAKeep  :!Eg
+    If A$="}" : Gosub _SelectNext       :!Eg
+    If A$="{" : Gosub _SelectPrev       :!Eg
+    If A$="[" : Gosub _SelectPrevActive :!Eg
+    If A$="]" OR A$=" " : Gosub _SelectNextActive :!Eg
+
+    If MK=2 AND oux=>0 AND oux<7 AND ouy=>0 AND ou=>0 AND ou<=OUS:Gosub _SelectPanel :!Eg
+    If MK=2 AND lux=>0 AND lux<7 AND luy=>0 AND lu=>0 AND lu<=LUS:Gosub _Unload      :!Eg
+
+    If \T=>#F0 AND \T<=#F1
+      If A$="-" : DPS = 1: Gosub _SetProd :!Eg
+      If A$="+" : DPS =-1: Gosub _SetProd :!Eg
+    Else
+      If A$="-" AND (U(\T)\MType AND H(M(\X,\Y,0)\HX)\VChg)<>0
+        \Level = 1-\Level
+        If \Level=1 : t=#LU+U(\T)\LUI Else t=\T :EndIf
+        Cui {\X,\Y,#CLEV,P,t}
+        Visionize {\X,\Y,0}
+        If U(\T)\Moves[\Level]<\Moves : \Moves = U(\T)\Moves[\Level] :EndIf
+        Gosub PanelUnit :!Eg
+      If A$="+" : TLevel = 1-TLevel : Gosub PanelUnit :!Eg
+    EndIf
+
+    If A$="`" : Z = 1-Z : Boxf WXA,WYA,WXB-1,WYB-1,0 : Gosub MapFresh :!Eg
+    If A$="g" : GRD + 1 : If GRD>2 : GRD=0 :EndIf : Gosub Kartta :!Eg
+
+    CNIF #HE=1
+    If A$="h" : ShowScreen 2 : MouseWait : ShowScreen 1 :EndIf
+    CEND
+    If A$="t" : Msg{"Turn:"+UStr$(Turn)} :EndIf
+
+    n
+    Repeat
+    Until Joyb(0)=0
+  Until A$="Q" OR A$="*"
+  Gosub _DeActivate
+  Return
+
+
+
+
+
+
+
+
+
+CNIF #TI=1
+_UnitStats                            ; View Unit Stats On Panel
+  SBT = 2                             ; Show BattleType
+  FNSInk CB
+  ustat
+  Boxf PXX,PYY,PXX+PGX-1,PYY+PGY-1,CS
+  FNSOrigin 0,PYY
+  For t=0 To UTypes
+    UBT = U(t)\BType
+    If UBT = SBT
+      Blit Xi,Yi+y*#FYS,Unt_Sps+t
+      FNSPrint 1,PNX(0),0,P(P)\act[t]
+      FNSPrint 1,PNX(1),0,P(P)\lost[t]
+      FNSPrint 1,PNX(2),0,P(P)\kills[t]
+      FNSPrint 1,PNX(3),0,P(P)\prod[t]
+      y + 1
+    EndIf
+  Next
+  Repeat
+    a$ = Inkey$
+    a  = Val(a$)
+    If a>0 AND a<5 :Pop Repeat :Goto ustat :EndIf
+  Until a$=" "
+  FNSOrigin 0,0
+  Gosub PanelUnit
+  Return
+
+_CityStats
+  FNSInk CB
+  Boxf PXX,PYY,PXX+PGX-1,PYY+PGY-1,CS
+  FNSOrigin 0,PYY : y = 0
+  For u=0 To P(P)\unts
+    t = I(u,P)\T
+    If t=>#F0 AND t<=#F1
+      Blit Xi,Yi+y*#FYS,Ter_Sps+TC+t-#F0
+      Blit Xi,Yi+y*#FYS,Unt_Sps+t
+      FNSPrint 1,PNX(0),0,P(P)\act[t]
+      FNSPrint 1,PNX(1),0,P(P)\lost[t]
+      FNSPrint 1,PNX(2),0,P(P)\kills[t]
+      FNSPrint 1,PNX(3),0,P(P)\prod[t]
+      y + 1
+    EndIf
+  Next
+  FNSOrigin 0,0
+  Gosub PanelUnit
+  Return
+CEND
+
+CEND
+
+
+
+
+
+
+
+_Map                                  ; ZoomedMiniScrollMap; Units, Production
+  Gosub MapFresh
+
+  CNIF #GM=1
+  If PB
+    Boxf PXX,PBY,PXX+8*#PNX,PBY+#PNY*2,0
+    Blit #Pnl_Sps+1,PXX,PBY           ; Panel buttons
+  EndIf
+  CEND
+
+  Z = 1 : ZM = 2
+  mapbeg
+  LX & NOT 3
+  Mapper   = True
+  MFreshed = False
+  Box WXw(ZM)-3,WYw(ZM)-3,WXr(ZM)+2,WYr(ZM)+2,C3
+  Box WXw(ZM)-2,WYw(ZM)-2,WXr(ZM)+2,WYr(ZM)+2,C0
+  Box WXw(ZM)-1,WYw(ZM)-1,WXr(ZM)  ,WYr(ZM)  ,C1
+  Box WXw(ZM)-2,WYw(ZM)-2,WXr(ZM)+1,WYr(ZM)+1,C2
+  Repeat
+
+    A$    = Inkey$
+    MK    = Joyb(0)
+    X     = SMouseX
+    Y     = SMouseY
+    tim.l = Timer
+    DX = 0
+    DY = 0
+    TX = LX+((X-WXd(ZM)-1)/(Z+1))-WPX
+    TY = LY+((Y-WYd(ZM)-1+(TX & 1)*Z-Z)/(Z+1))-WPY
+    If Z=3 : TX & NOT 3 :EndIf
+    Gosub sTXTY
+
+    CNIF #GM=1
+    If PB
+      pbx = (X-PXX)/#PNX              ; Panel Button #
+      pby = (Y-PBY)/#PNY
+      pb  = pbx+pby*8
+      If pby=>0 AND pby<=1 AND MK>0 AND pbx=>0 AND pbx<=7 AND pb<>0 AND pb<>2 AND pb<>3 AND pb<>11
+        Blit #Pnl_Sps+3,PXX+pbx*#PNX,PBY+pby*#PNY
+        Repeat:Until Joyb(0)=0
+        Blit #Pnl_Sps+2,PXX+pbx*#PNX,PBY+pby*#PNY
+        Select pb
+          Case  1 : A$ = Cu$
+          Case  8 : A$ = Cl$
+          Case  9 : A$ = Cd$
+          Case 10 : A$ = Cr$
+          Case 12 : If MK=1 : A$ = "u" Else A$ = "o" : MK = 0 :EndIf
+          Case 13 : If MK=1 : A$ = "p" Else A$ = "o" : MK = 0 :EndIf
+          Case 14 : A$ = "`"
+          Case 15 : A$ = " "
+        End Select
+        If pb>2 AND pb<7
+          If UMode<>2 : UMode=2 : MFreshed=False Else A$=UStr$(pb-3) :EndIf
+        EndIf
+      EndIf
+    EndIf
+    CEND
+
+    If A$=Cu$:LY-Skrol:EndIf
+    If A$=Cr$:LX+Skrol:EndIf
+    If A$=Cd$:LY+Skrol:EndIf
+    If A$=Cl$:LX-Skrol:EndIf
+
+    If MK>0 AND X>WXw(ZM) AND X<WXr(ZM) AND Y>WYw(ZM) AND Y<WYr(ZM)
+      LX = TX
+      LY = TY
+    Else
+      If MK<>2
+        MK = 0
+      EndIf
+    EndIf
+
+    CNIF #GM=1
+    If KED=False
+      If A$="o" AND UMode<>0 : UMode = 0 : MFreshed = False :EndIf
+      If A$="p" AND UMode<>1 : UMode = 1 : MFreshed = False :EndIf
+      If A$="u" AND UMode<>2 : UMode = 2 : MFreshed = False : SBT = %1111 :EndIf
+    EndIf
+    CEND
+
+    If A$="`" AND ExecVersion=>36
+      If Z=3 : Z=1 : ZM = 2 : Pop Repeat : Goto mapbeg :EndIf
+      If Z=1 : Z=3 : ZM = 3 : Pop Repeat : Goto mapbeg :EndIf
+    EndIf
+
+    CNIF #GM=1
+    If UMode=2 AND KED=False
+      tbt = Val(A$)                   ; Toggle BattleType
+      If tbt>0 AND tbt<=#BT_SUB
+        If SBT AND p2(tbt)
+          SBT = SBT & NOT p2(tbt) Else
+          SBT = SBT | p2(tbt)    :EndIf
+        MFreshed=False
+      EndIf
+    EndIf
+    CEND
+
+    If (Instr(Cm$,A$)>0 AND A$>"") OR MK=1 OR MFreshed=False
+      Gosub sLXLY
+      Gosub MapFresh
+
+
+      CNIF #GM=1
+      If KED=False
+        Select UMode
+          Case 1 : Gosub _Production
+          Case 2 : Gosub _Units
+        End Select
+      EndIf
+      CEND
+
+      MFreshed = True
+
+      Repeat : Until Joyb(0)=0
+    EndIf
+  Until A$=" " OR MK=2
+
+  Mapper = False
+  Z = 1
+  Gosub Kartta
+
+  CNIF #GM=1
+  If PB=True AND KED=False
+    Boxf PXX,PBY,PXX+8*#PNX,PBY+#PNY*2,0
+    Blit #Pnl_Sps,PXX,PBY             ; Panel buttons
+  EndIf
+  CEND
+
+  Return
+
+
+
+
+CNIF #GM=1
+_Production                           ; Update Production Map
+  FNSInk C3
+  z = Z+1
+  For u=0 To P(P)\unts
+    If I(u,P)\Prod<>0
+      x = I(u,P)\X
+      y = I(u,P)\Y
+      zx = x-LX
+      zy = y-LY
+      !s{zx,0,MXX,zy,0,MYY}
+      x0 = WXd(ZM)+zx*z
+      y0 = WYd(ZM)+zy*z+1-(zx & 1)+1
+      !c{x0,WXw(ZM),WXr(ZM),MXX*z,y0,WYw(ZM),WYr(ZM),MYY*z}
+      If x0>WXw(ZM)+8 AND x0<WXr(ZM)-8 AND y0>WYw(ZM)+8 AND y0<WYr(ZM)-8
+
+.
+PMod = U(I(u,P)\Prod)\PTime*10/H(M(I(u,P)\X,I(u,P)\Y,0)\HX)\CSize*ProdF/10
+
+        tt$  = UStr$(I(u,P)\PTime)+"/"+UStr$(PMod)
+        jp.l = Len(tt$)
+        jl.w = FNSLength(2,tt$)
+        x0 = x0 - (#HXX/4)*z
+        y0 = y0 - (#HYY/8)*z-3
+        FNSPrint 2,x0+#HXX/2-jl/2+1,y0+#HYY-1,tt$,0,C0
+        FNSPrint 2,x0+#HXX/2-jl/2,y0+#HYY-2,tt$,0,C3
+        Blit #Unt_Sps+I(u,P)\Prod,x0,y0,P
+      EndIf
+    EndIf
+  Next
+  Return
+
+_Units                                ; Update Units Map
+  z = Z+1
+  For p=0 To Players-1
+    For u=0 To P(p)\unts
+      If (p2(U(I(u,p)\T)\BType) & SBT) AND I(u,p)\Vis
+        x = I(u,p)\X
+        y = I(u,p)\Y
+        zx = x-LX
+        zy = y-LY
+        !s{zx,0,MXX,zy,0,MYY}
+        x0 = WXd(ZM)+zx*z
+        y0 = WYd(ZM)+zy*z+1-(zx & 1)+1
+        !c{x0,WXw(ZM),WXr(ZM),MXX*z,y0,WYw(ZM),WYr(ZM),MYY*z}
+        If x0>WXw(ZM)+8 AND x0<WXr(ZM)-8 AND y0>WYw(ZM)+8 AND y0<WYr(ZM)-8
+          x0 = x0 - (#HXX/4)*z
+          y0 = y0 - (#HYY/8)*z-3
+          If u=U0 : Blit #Vgr_Sps+3,x0,y0,p :EndIf
+          Blit #Unt_Sps+I(u,p)\T,x0,y0,p
+        EndIf
+      EndIf
+    Next
+  Next
+  Return
+
+
+
+
+
+.Interface                            ; Main Interface Loop
+  CNIF #AU=1
+  If AUDIO=True
+    Poke.w Addr Sound(U(\T)\Sfx)+4,125+U(\T)\Frequ*20
+    LoopSound U(\T)\Sfx,15,63,63,63,63
+  EndIf
+  CEND
+
+  x = \X
+  y = \Y
+  Gosub GCalc
+
+  UI      = (M(\X,\Y,B)\UI MOD #UM)
+  I$(0,1) = FName$(\Factory,P)
+  I$(0,2) = UStr$(\ProdNo)+". unit"
+
+  If CITY=True
+    I$(0,0) = I$(0,1)    Else
+    I$(0,0) = UName$(\T):EndIf
+
+  ResetTimer                          ; MA = MainArea
+  s1 = 2
+  s2 = 10
+  inputloop
+    A$ = Inkey$
+    MK = Joyb(0)
+    X  = SMouseX
+    Y  = SMouseY
+    !Ch{X,Y}                          ; Pointer on Main Area
+      MA = True Else MA = False :EndIf
+    !Ch{x0,y0}                        ; Active Unit Visible
+      AU = True Else AU = False :EndIf
+    HX = (X-(#HXX-#HDX)/2-SXA)/#HDX
+    If HX & 1
+      HY = (Y-SYA)/#HYY       Else
+      HY = (Y-#HDY-SYA)/#HYY :EndIf
+    TX = LX+HX
+    TY = LY+HY
+    Gosub sTXTY
+    D = D{\X,\Y,TX,TY}
+    If A$<>"" OR MK<>0 : Goto IOhi :EndIf
+    If Timer>5
+      ResetTimer
+      !ad{s1,1,0,2}
+      !ad{s2,1,0,10}
+      If s2=0 OR s2=4 OR s2=8
+        !Clin {1,#TL,4,#TL+1,CS}   : FNSPrint 1,PNX(1),PYY+#TL*#FYS,I$(0,s2/4),0,C4
+        If \Cargo=0 AND U(\T)\Cargo=0
+          !Clin {1,#BL,4,#BL+1,CS} : FNSPrint 1,PNX(1),PYY+#BL*#FYS,I$(1,s2/4),0,CY
+        EndIf
+      EndIf
+      If AU
+        If s1=0 OR s1=1 : Blit #Ter_Sps+M(\X,\Y,B)\HX,x0,y0,0 :EndIf
+        Select s1
+          Case 0 : Blit #Unt_Sps+\T,x0,y0,P
+          Case 2 : Blit #Unt_Sps+UI,x0,y0,P
+        End Select
+      EndIf
+    EndIf
+    If MA AND (TX<>EX OR TY<>EY)
+      Gosub PanelHex
+      If \Prod=0 AND (\Cargo=0 OR U(\T)\Cargo=0)
+        t = M(TX,TY,B)\UI MOD #UM
+        p = M(TX,TY,B)\UI/#UM
+        h = 0
+        Gosub PanelUI
+      EndIf
+      EX = TX
+      EY = TY
+    EndIf
+
+    If MA<>EA
+      EA = MA
+      If MA=False
+        Gosub HexUnits
+      EndIf
+    EndIf
+
+  If MK=0 : If A$="" : Goto inputloop :EndIf :EndIf
+
+  IOhi
+  If AU
+    Blit #Ter_Sps+M(\X,\Y,B)\HX,x0,y0,0
+    Blit #Unt_Sps+UI,x0,y0,P :EndIf
+
+  I = 0
+  If MA : I = 1 :EndIf
+  If X>WXw(Z) AND Y>WYw(Z) AND X<WXr(Z) AND Y<WYr(Z) : I = 2 :EndIf
+
+  oux = (X-Xi)/#HXX                   ; Other Units Selects
+  ouy = (Y-YI)/#HYY
+  ou  = oux+ouy*7
+
+  lux = (X-Xi)/#HXX                   ; Loaded Units Selects
+  luy = (Y-((#BL+1)*#FYS))/#HYY
+  lu  = lux+luy*7
+
+  If PB
+    pbx = (X-PXX)/#PNX                ; Panel Button #
+    pby = (Y-PBY)/#PNY
+    pb  = pbx+pby*8
+
+    If Y=>PBY AND Y<=PBY+2*#PNY AND MK>0 AND pbx=>0 AND pbx<=7
+      Blit #Pnl_Sps+3,PXX+pbx*#PNX,PBY+pby*#PNY
+      Repeat:If Joyb(0)=3:MK=3:EndIf:Until Joyb(0)=0
+      Blit #Pnl_Sps+2,PXX+pbx*#PNX,PBY+pby*#PNY
+      Select pb
+        Case  0 : If MK=1 : A$="[" Else A$="7" :EndIf
+        Case  1 : If MK=1 : A$="]" Else A$="8" :EndIf
+        Case  8 : If MK=1 : A$="-" Else A$="+" :EndIf
+        Case  9 : If U(\T)\CType>0 : A$="l" Else A$="9" :EndIf
+        Case  2 : If MK=1 : A$="4" Else A$="{" :EndIf
+        Case  3 : If MK=1 : A$="5" Else A$=Cu$ :EndIf
+        Case  4 : If MK=1 : A$="6" Else A$="}" :EndIf
+        Case  5 : If MK=1 : A$="/" Else A$="\" :EndIf
+        Case  6 : A$="`"
+        Case  7 : If MK=1 : A$="u" Else A$="p" :EndIf
+        Case 10 : If MK=1 : A$="1" Else A$=Cl$ :EndIf
+        Case 11 : If MK=1 : A$="2" Else A$=Cd$ :EndIf
+        Case 12 : If MK=1 : A$="3" Else A$=Cr$ :EndIf
+        Case 13 : If MK=1 : A$="r" Else A$="P" :EndIf
+        Case 14 : If MK=1 : A$="." Else A$="0" :EndIf
+        Case 15 : If MK=3 : A$="*" Else Msg{"Both > EndTurn"}:EndIf
+      End Select
+      MK = 0 : TX = \X : TY = \Y
+    EndIf
+
+  EndIf
+
+  If Instr(movstring$,A$)>0 AND A$>""
+    I  = 1
+    MK = 1
+    TX = \X
+    TY = \Y
+  EndIf
+
+  If I=2 AND MK=1
+    TX = LX+((X-WXd(Z)-1)/(Z+1))
+    TY = LY+((Y-WYd(Z)-1+(TX & 1)*Z-Z)/(Z+1))
+    Gosub sTXTY
+    Gosub SkrolTo
+  EndIf
+
+  DX = 0
+  DY = 0
+  If A$=Cu$:DY=-Skrol:EndIf
+  If A$=Cr$:DX= Skrol:EndIf
+  If A$=Cd$:DY= Skrol:EndIf
+  If A$=Cl$:DX=-Skrol:EndIf
+  If Instr(Cm$,A$)>0 AND A$>"" : Gosub Skrol : I = 0 : MK = 0 : A$ = "" :EndIf
+
+  If A$="5":TY-1:EndIf
+  If A$="6":TX+1:TY+YL:EndIf
+  If A$="3":TX+1:TY+YL+1:EndIf
+  If A$="2":TY+1:EndIf
+  If A$="1":TX-1:TY+YL+1:EndIf
+  If A$="4":TX-1:TY+YL:EndIf
+  If Instr(movstring$,A$,0)>0 OR A$="" : Gosub TargetCheck :EndIf
+  Return
+
+.TargetCheck                          ; Check Some Booleans
+  Gosub sTXTY
+  D = D{\X,\Y,TX,TY}
+  SAME_HEX = False
+  NXTO     = False
+  UNS      = False
+  ENMY     = False
+  If I=1
+    Unitlist {TX,TY,1}
+    If D=0      :SAME_HEX=True:EndIf
+    If D=1      :NXTO    =True:EndIf
+    If hS(1)>-1 :UNS     =True:EndIf
+    For i=0 To hS(1)
+      If hP(i,1)<>P AND hP(i,1)<>-1 : ENMY = True :EndIf
+    Next
+  EndIf
+  Return
+
+
+
+
+
+._RangedAttack                        ; Artillery Attack
+  If D>1 AND \FarF<U(\T)\Shots AND D<=U(\T)\Range[\Level]
+    Msg {"Rngd. Attack"}
+    If AUDIO : Volume 15,0,0,0,0 :EndIf
+
+    If U(\T)\Ammo>0
+      If \Ammo=0 : Msg{"Out of ammo"} : Return :EndIf
+     \Ammo - 1
+    EndIf
+
+    \FarF + 1
+    exit  = False
+    V     = False
+
+    For u=0 To P(P)\unts
+      r = D{I(u,P)\X,I(u,P)\Y,TX,TY}
+      If U(I(u,P)\T)\Vision[\Level] => r
+        V  = True
+        Vu = u :EndIf
+    Next
+
+    If UNS=False OR Turn>Protection : Explo{TX,TY} :EndIf
+
+    If UNS
+      If Turn<=Protection : Msg{"Protection"} :Return :EndIf
+      Unitlist {\X,\Y,0}
+      dist  = D
+      A     = 0
+      D     = 1
+      N_(0) = N
+      FF    = True
+      BC    = 0
+      Gosub BatRut
+    Else
+      AV.q = U(\T)\Attack[1]*(\Vet+10)/10
+      a    = Rnd(AV)
+
+      USEPATH M(TX,TY,0)
+      If H(\HX)\Strength <= a AND H(\HX)\Strength<>0
+        \HX = H(\HX)\ADamage
+        REP = #R_TERRAIN
+        Rep_P = 0  : Rep_U = 0
+        Rep_X = TX : Rep_P = TY
+        CRep{TX,TY,0}
+        HexCircle {#HC_MS_CORR,TX,TY,1,1}
+
+        If V
+          u  = U0
+          U0 = Vu :Gosub UUV
+          U0 = u  :EndIf
+      EndIf
+      USEPATH I(U0,P)
+    EndIf
+    Gosub PanelUnit
+  EndIf
+  Return
+
+
+
+
+
+
+CirPos
+  If x & 1
+    YL =-1 Else
+    YL = 0:EndIf
+  X = x+c(hi,R)\x
+  Y = y+c(hi,R)\y+((c(hi,R)\l AND YL)=True)
+  !sXY
+  Return
+
+Battle                                ; Outer Battle Loop
+  If Turn<=Protection : Msg{"Protection"} : Return :EndIf
+  Msg{"Battle"}
+  Unitlist {\X,\Y,0}
+  If AUDIO
+    Volume 15,0,0,0,0
+  EndIf
+
+  FF = False
+  V  = True
+  BC = 0
+  Repeat
+    For A=0 To 1
+      D = 1-A
+      For N_(0)=0 To hS(A) : Gosub BatRut :Next
+    Next
+    BC + 1
+  Until hS(0)=-1 OR hS(1)=-1 OR BC>5
+  If BC>10
+    Gosub PrepReport
+    Gosub MakeReport
+  EndIf
+  Return
+
+
+
+
+
+BatRut                                ; Inner Battle Routine
+  exit  = False
+  n     = 0
+  U_(0) = hN(N_(0),A)
+  P_(0) = hP(0,A)
+  Gosub BatDef
+
+  If H(M(X_(0),Y_(0),0)\HX)\CSize=>10 AND (U(T_(0))\Specials & #SA_DO_NOT_CDEF)<>0 :Return :EndIf
+
+  N_(1) = 0
+  While N_(1)<=hS(D)
+
+    n     = 1
+    U_(1) = hN(N_(1),D)
+    P_(1) = hP(0,D)
+    Gosub BatDef
+
+    ax = X_(0) : dx = X_(1)
+    ay = Y_(0) : dy = Y_(1)
+    at = T_(0) : dt = T_(1)
+    ab = B_(0) : db = B_(1)
+    au = U_(0) : du = U_(1)
+    ap = P_(0) : dp = P_(1)
+    av = I(au,ap)\Vet
+    dv = I(du,dp)\Vet
+    al = I(au,ap)\Level
+    dl = I(du,dp)\Level
+    Gosub BValueCalc
+
+    a = AV/4+Rnd((AV*3)/4)
+    d = DV/4+Rnd((DV*3)/4)
+    DAMAGE = a-d
+    p = P_(1)
+
+    If DAMAGE>0
+
+      If NOT FF OR (FF AND V) : Explo{X_(1),Y_(1)} :EndIf
+      I(U_(1),P_(1))\Hits - DAMAGE
+      If Rnd(2)=2 AND I(U_(1),P_(1))\TDef>0 : I(U_(1),P_(1))\TDef - 1 :EndIf
+      If P=P_(1) AND U=U_(1) : Gosub PanelHMFT :EndIf
+
+      If I(U_(1),P_(1))\Hits<=0
+
+        If P_(1)=P : Killed = True :EndIf
+        If I(U_(0),P_(0))\Vet<15 AND U(T_(1))\Hits=>U(T_(0))\Hits : I(U_(0),P_(0))\Vet + 1 :EndIf
+
+        REP = 0 : Gosub PrepReport : UnitKill {U_(1),P_(1),P,V}
+        REP = 3 : Gosub MakeReport
+
+      Else
+        If FF=True
+          REP = #R_DESTROYED    ; 2 ??
+          Gosub PrepReport
+          Gosub MakeReport
+        EndIf
+      EndIf
+    Else
+      If FF=True
+        REP = #R_RNGD_ATTACK    ; 5 ??
+        Gosub PrepReport
+        Gosub MakeReport
+      EndIf
+    EndIf
+    N_(1) + 1
+  Wend
+  Return
+
+BatDef                               ; Get some temp vars
+  T_(n) = I(U_(n),P_(n))\T
+  B_(n) = U(T_(n))\BType-1 : If B_(n)=#BT_CITY-1 : B_(n) = #BT_GND-1 :EndIf
+  X_(n) = I(U_(n),P_(n))\X
+  Y_(n) = I(U_(n),P_(n))\Y
+  Return
+
+
+
+
+PrepReport                            ; Prepare Combet Reports, report to the other one
+  If BC<=5                            ; When creating report
+    If p = P
+      If REP=0 : REP = #R_REPULSED :EndIf     ; Attacker was playing, lost
+      R = 0-FF
+      O = 1
+    Else
+      If REP=0 : REP = #R_DESTROYED :EndIf     ; Defender was playing, won
+      R = 1
+      O = 0-FF
+    EndIf
+  Else
+    REP = #R_ATTACK                   ; Attacker was playing, no result
+    R   = D
+    O   = A
+  EndIf
+
+  If P(P_(R))\cmbs>#Reps
+    Msg{"Rep. Limit"} Else
+    P(P_(R))\cmbs + 1:EndIf
+
+  p = P_(R)
+  r = P(p)\cmbs
+
+  R(r,p)\Rep = REP
+  R(r,p)\Fac = I(U_(1),P_(1))\Factory
+  R(r,p)\Prd = I(U_(1),P_(1))\ProdNo
+  R(r,p)\T   = I(U_(1),P_(1))\T+#UM*P_(1)
+  R(r,p)\X   = X_(1)    ; Puolustaja
+  R(r,p)\Y   = Y_(1)
+  R(r,p)\x   = X_(0-FF) ; Hykkj
+  R(r,p)\y   = Y_(0-FF)
+  Return
+
+MakeReport                            ; Report to others than those who fought
+  Unitlist {X_(1),Y_(1),D}
+  R(r,p)\HX = M(R(r,p)\X,R(r,p)\Y,0)\HX, M(R(r,p)\X,R(r,p)\Y,0)\UI
+  R(r,p)\hx = M(R(r,p)\x,R(r,p)\y,0)\HX, M(R(r,p)\x,R(r,p)\y,0)\UI
+
+  RepFlag = p2(P_(0-FF)+1) OR p2(P_(1)+1)
+  Rep_P = P_(1)
+  Rep_U = U_(1)
+  Rep_X = X_(0-FF)
+  Rep_Y = Y_(0-FF)
+
+  VFrom = U(I(Rep_U,Rep_P)\T)\VFrom[\Level]
+  HexCircle {#HC_REPORT,X_(1),Y_(1),0,VFrom}
+  Return
+
+
+
+
+
+
+
+
+
+UnitUpdate                            ; Update process
+  If RepSFlag<>0 OR Turn=1 :Goto Update :EndIf
+
+.Report                               ; View Combat Reports
+  Gosub SelectFirstActive : Gosub _DeActivate
+  USEPATH R(r,P)
+  Format ""
+  ss = 1
+  r  = 1
+
+  While r<=P(P)\cmbs
+
+    TX = \x
+    TY = \y
+    Gosub SkrolTo
+
+    MC = \T/#UM*4+3
+    If \Rep=#R_MESSAGE
+      p  = \Fac
+      m  = \Prd
+      SMsg{Message$(m,p),p*4+3}
+    Else
+      x = \X : y = \Y : Gosub GCalc : x1 = x0 : y1 = y0
+      x = \x : y = \y : Gosub GCalc
+      m = M(\x,\y,B)\UI
+      M = M(\X,\Y,B)\UI
+      If M=#SH   : \UI = #SH   :EndIf
+      If m=#SH   : \ui = #SH   :EndIf
+      If M=#SH+1 : \UI = #SH+1 :EndIf
+      If m=#SH+1 : \ui = #SH+1 :EndIf
+      If M(\x,\y,B)\HX<>0
+        s  = True
+        fT = M(\x,\y,B)\HX : FT = \hx
+        fU = M(\x,\y,B)\UI : FU = \ui
+      Else
+        s  = False
+        fT = 0 : FT = 0
+        fU = 0 : FU = m
+      EndIf
+
+      If M(\X,\Y,B)\HX<>0
+        S  = True
+        tT = M(\X,\Y,B)\HX : TT = \HX
+        tU = M(\X,\Y,B)\UI : TU = \UI
+      Else
+        S  = False
+        tT = 0 : TT = 0
+        tU = 0 : TU = M
+      EndIf
+
+      t    = \T MOD #UM
+      p    = \T/#UM
+      exit = False
+      FL   = 2
+
+      M(\x,\y,B)\HX = FT
+      M(\X,\Y,B)\HX = TT
+      If FT<>fT : HexCircle {#HC_MS_CORR,\x,\y,0,0} :EndIf
+      If TT<>tT : HexCircle {#HC_MS_CORR,\X,\Y,0,0} :EndIf
+
+      Repeat
+
+        !ad{FL,1,0,2}
+        Select FL
+          Case 0 : Msg{Rep$(\Rep)}
+          Case 1 : Msg{FName$(\Fac,p)}
+          Case 2 : Msg{UStr$(\Prd)+". unit"}
+        End Select
+
+        ;Unchanged
+        Blit #Ter_Sps+fT,x0,y0,0
+        Blit #Unt_Sps+(fU MOD #UM),x0,y0,fU/#UM
+        Blit #Ter_Sps+tT,x1,y1,0
+        Blit #Unt_Sps+(tU MOD #UM),x1,y1,tU/#UM
+        If \Rep = #R_REPORTED
+          vT = FT
+          vU = FU
+          Slide{\x,\y,\X,\Y,\T,1}
+        Else
+
+          Delay {15}
+
+          If \Rep=#R_RNGD_ATTACK      ; 5! ??
+            Explo{\x,\y} Else
+            Explo{\X,\Y}:EndIf
+          !HexBlit {FT,FU,1}
+        EndIf
+
+        ; Changed
+        UnBuffer 0
+        Blit #Ter_Sps+TT,x1,y1,0
+        Blit #Unt_Sps+(TU MOD #UM),x1,y1,TU/#UM
+        Delay {15}
+
+      Until exit=True OR Joyb(0)<>0 OR SKIP
+
+      If s
+        vT = \hx
+        vU = \ui
+        If vU=0 OR vU=#SH OR vU=#SH+1 OR vU=#SH-1
+          vC = H(vT)\Color Else
+          vC = vU/#UM*4+3 :EndIf
+        Vgrfx{\x,\y}
+      EndIf
+      If S
+        vT = \HX
+        vU = \UI
+        If vU=0 OR vU=#SH OR vU=#SH+1 OR vU=#SH-1
+          vC = H(vT)\Color Else
+          vC = vU/#UM*4+3 :EndIf
+        Vgrfx{\X,\Y}
+      EndIf
+      M(\x,\y,B)\UI = FU
+      M(\X,\Y,B)\UI = TU
+    EndIf
+    r + 1
+  Wend
+
+
+
+USEPATH I(U0,P)
+.Update                               ; Update Units, Production etc
+  MC = C3
+  If RepSFlag=0
+    Msg{"SZM Set..."}                 ; Scroll zoom map
+    For p=0 To Players-1
+      If NOT p=P
+        For u=0 To P(p)\unts
+          I(u,p)\Vis = 0
+        Next
+      EndIf
+    Next
+    For u=0 To P(P)\unts
+      If I(u,P)\T<#F0 OR I(u,P)\T>#F1
+        I(u,P)\Vis = True   Else
+        I(u,P)\Vis = False :EndIf
+    Next
+
+    Gosub Hiding
+    Msg{"VisUp"}
+    For U0=0 To P(P)\unts : Gosub UUV :Next
+
+  EndIf
+  Msg{"Updating..."}
+  U0 = 0
+
+  Repeat
+    uuloop
+    ui = M(\X,\Y,0)\UI-P*#UM
+    If \T=>#F0 AND \T<=#F1 : CITY = True Else CITY = False :EndIf
+    If \Com=#C_TEMP_SENTRY : \Com = 0 :EndIf
+    If \Com=#C_MOVETO_STOP : \Com = #C_MOVE_TO :EndIf
+    If (ui=>#HC AND ui<#HC+5) OR \Com=#C_TRANSPORT OR (CITY AND (\Com=0 OR \Com=#C_PROD_HALTED))
+
+      \Ammo = U(\T)\Ammo
+
+      If \TDef<U(\T)\TDef : \TDef + 2 :EndIf
+
+      If AUTOREFUEL
+        If \Fuel<>U(\T)\Fuel
+          \Fuel + U(\T)\Refuel
+          If \Fuel > U(\T)\Fuel : \Fuel = U(\T)\Fuel :EndIf
+        EndIf
+      EndIf
+      If AUTOREPAIR
+        If CITY=False OR \Com=0
+          If \Hits<>U(\T)\Hits
+            \Hits + U(\T)\Repair
+            If \Hits > U(\T)\Hits : \Hits = U(\T)\Hits :EndIf
+          EndIf
+        EndIf
+      EndIf
+
+    Else
+
+      If U(\T)\Fuel>0 AND \Moves=U(\T)\Moves[\Level] AND U(\T)\MType<=#MT_AT_AIR
+        \Fuel - 1
+        If \Fuel = 0
+          x = \X
+          y = \Y
+          Explo{x,y}
+          UnitKill  {U0,P,P,True}
+          Visionize {x,y,0}
+          Goto uuloop
+        EndIf
+      EndIf
+    EndIf
+
+    \Moves   = U(\T)\Moves[\Level]
+    \Loading = 0
+    \FarF    = 0
+    If \Hits<U(\T)\Hits*3/4 AND Int(Rnd(1)+.5)=1 : \Hits + 1 :EndIf
+
+    If \Com=#C_PRODUCING OR \Com=#C_PROD_DONE OR \Com=#C_PROD_HALTED
+      \PTime + 1
+.
+PMod = U(\Prod)\PTime*10/H(M(\X,\Y,0)\HX)\CSize*ProdF/10
+
+      If (\PTime => PMod)
+        Msg{UStr$(PMod)}
+        Unitlist {\X,\Y,0}
+        If hS(0)<#Units_Hex AND P(P)\unts<#IUnits
+          P(P)\unts + 1
+          P(P)\tous + 1
+          u              = P(P)\unts
+          I(u,P)\Vis     = True
+          I(u,P)\T       = \Prod
+          I(u,P)\X       = \X
+          I(u,P)\Y       = \Y
+          I(u,P)\Vet     = 10
+          I(u,P)\Hits    = U(\Prod)\Hits
+          I(u,P)\TDef    = U(\Prod)\TDef
+          I(u,P)\Fuel    = U(\Prod)\Fuel
+;          I(u,P)\Cargo   = 0
+          I(u,P)\Ammo    = U(\Prod)\Ammo
+;          I(u,P)\Prod    = 0
+;          I(u,P)\Com     = 0
+          I(u,P)\Factory = \Factory
+          I(u,P)\FacID   = U0
+          I(u,P)\ProdNo  = P(P)\tous
+          Cui {\X,\Y,#CADD,P,\T}
+          Msg{UStr$(\Prod)}
+          HexCircle{#HC_VISIONIZE,\X,\Y,0,U(\Prod)\Vision[0]}
+          \PTime - PMod
+          \Com   = #C_PROD_DONE
+        Else
+          \Com = #C_PROD_HALTED
+        EndIf
+      EndIf
+    EndIf
+    U0 + 1
+  Until U0>P(P)\unts
+  RepSFlag = 1                        ; Report Already Shown
+
+
+
+.Builds
+  For U0=0 To P(P)\unts
+    If \Com=#C_BUILD OR \Com=#C_BUILD_R_TO      ; Builds, terrain Changes
+      \PTime - 1
+      If \PTime=0 : Gosub Do_Build :EndIf
+    EndIf
+  Next
+  Return
+
+
+.Hiding
+  Msg{"Hiding..."}
+  sha = 0
+  For x=0 To MXX-1
+    sha = 1-sha
+    For y=0 To MYY-1
+      ui = M(x,y,B)\UI
+      If H(M(x,y,B)\HX)\CSize<10 AND ui<>#SH AND ui<>#SH+1 AND ui<>#SH-1
+        M(x,y,B)\UI = #SH+sha
+        vT = M(x,y,B)\HX
+        vU = #SH+sha
+        vC = H(vT)\Color
+        Vgrfx{x,y}
+      EndIf
+    Next
+  Next
+  Msg{"HDone"}
+  Return
+
+
+
+
+
+Do_Build
+  If \CP[0]=#T_BRIDGE
+    \CP[0] = 0
+    If \CP[2]=2 OR \CP[2]=7
+      x = \X
+      y = \Y
+      R = 1
+      For hi=2 To 7
+        Gosub CirPos
+        If H(M(X,Y,0)\HX)\CSize=>7 : \CP[0]=bridge(hi) :EndIf
+      Next
+    EndIf
+  EndIf
+
+  If \CP[0]<>0
+    M(\X,\Y,0)\HX = \CP[0]
+    HexCircle {#HC_MS_CORR,\X,\Y,0,1}
+    HexCircle {#HC_VISIONIZE,\X,\Y,0,1}
+  EndIf
+
+  If \Com=#C_BUILD : \Com=0 :EndIf
+  Return
+
+
+
+
+
+
+
+
+Find                                  ; Find Out Unit's ID in this hex
+  Unitlist {\X,\Y,0}
+  For n0=0 To hS(0)
+    If hN(n0,0) = U : N = n0 :EndIf
+  Next
+  Gosub _Activate
+  Return
+
+
+
+
+
+.UnitStatus
+  CSize = #F1-\T+1
+  If \Cargo<>0 AND U(\T)\Cargo<>0 : TRANS = True Else TRANS = False :EndIf
+  If U(\T)\MType=#MT_AT_AIR OR U(\T)\MType=#MT_AIR  : AIR   = True Else AIR   = False :EndIf
+  If \T=>#F0 AND \T<=#F1           : CITY  = True Else CITY  = False :EndIf
+  Return
+
+._Activate                             ; Activate Unit; Update Panel, Maps etc.
+  Gosub UnitStatus
+  If \X & 1
+    YL = -1 Else
+    YL =  0:EndIf
+  Gosub PanelUnit
+  X = \X-WPX
+  Y = \Y-WPY
+  If WOD=0
+    WOD = 1                           ; View Oldready Done
+    LX  = X
+    LY  = Y
+    Gosub Kartta
+  Else
+    DX = X-LX
+    DY = Y-LY
+    !c{DX,-MPX,MPX,MXX,DY,-MPY,MPY,MYY}
+    If DX>WPX-Skrol OR DX<-(WPX-Skrol) OR DY>WPY-Skrol OR DY<-(WPY-Skrol) : Gosub Skrol :EndIf
+  EndIf
+  TX = \X
+  TY = \Y
+  If \Prod=0
+    t = 0
+    p = 0
+    h = 0
+    Gosub PanelUI
+  EndIf
+
+  Repeat
+  Until Joyb(0)=0
+  Return
+
+_DeActivate
+  If AUDIO : Volume 15,0,0,0,0 :EndIf
+  If \Com=#C_PROD_DONE : \Com = #C_PRODUCING :EndIf
+  Return
+
+
+
+
+
+
+
+
+
+_MoveTo                               ; Move To Target Hex
+  Msg{"MoveTo"}
+  If U(\T)\Moves[\Level]=0 :Return :EndIf
+  If \Com=0
+    \Com = com
+    \CX  = TX
+    \CY  = TY
+  EndIf
+  TX  = \X
+  TY  = \Y
+  dst = 32000
+
+  HexCircle {#HC_SUB_MOVE_TO,\X,\Y,0,1}
+
+  If TX<>\X OR TY<>\Y
+    Gosub TargetCheck
+    Gosub _Move Else
+    \Com = 0   :EndIf
+  Gosub PanelHexCom
+  Return
+
+
+
+
+
+.MoveCheck                             ; Check
+  MTP_FIT = (H(M(TX,TY,0)\HX)\MAllow & (U(\T)\MType))<>0
+  MPS_FIT = ((\Moves=>H(M(TX,TY,0)\HX)\MCost) OR (\Moves>0 AND AIR=True) AND (\Fuel>0 OR U(\T)\Fuel=0))
+
+  PLY_FIT = True
+  For i=0 To hS(1)
+    If hP(i,1)<>P AND hP(i,1)<>-1 : PLY_FIT = False :EndIf
+  Next
+
+  UBI_FIT = (hI(1) & p2(U(\T)\BType))=0 OR hI(1)>%1111
+  UNS_FIT = (hS(1)<#Units_Hex)
+  Return
+
+
+
+
+
+._Move                                ; Trying to Move Unit
+  Gosub MoveCheck
+  Killed = False
+
+  If MPS_FIT=False AND \Com=#C_MOVE_TO : \Com = #C_MOVETO_STOP :EndIf
+  If \Com=#C_MOVE_TO AND (MTP_FIT=0 OR UBI_FIT=0 OR UNS_FIT=0 OR PLY_FIT=0)
+    \Com = 0
+    Gosub PanelHexCom
+    Return :EndIf
+
+  If MPS_FIT=False : Msg{"No moves"} :Return :EndIf
+
+  If NOT PLY_FIT
+
+    ebt = 0                           ; Enemys' Battle Type(s)
+    For i=0 To hS(1)
+      If hP(i,1)<>P
+        bta = U(I(hN(i,1),hP(i,1))\T)\BType : If bta=#BT_CITY : bta = #BT_GND :EndIf
+        ebt = (ebt OR p2(bta))
+      EndIf
+    Next
+
+    If (ebt & p2(U(\T)\BType))=0 AND DO_Attack=False
+      PLY_FIT = True
+
+    Else
+      If AIR=True
+        \Moves - 1 Else
+        \Moves - H(M(TX,TY,0)\HX)\MCost :EndIf
+      Gosub Battle
+      Unitlist {TX,TY,1}
+      If Killed
+        Gosub Killed Else
+        Gosub Find  :EndIf
+      Return
+    EndIf
+  EndIf
+
+  Gosub MovErr
+  If PLY_FIT AND MOK : Gosub MoveIt :EndIf
+  Return
+
+
+
+
+
+MoveIt                                ; Moving Unit
+  If \Com=#C_BUILD
+    \Com   = 0
+    \CP[0] = 0
+    \CP[1] = 0
+    \PTime = 0 :EndIf
+  If AIR=True                         ; Air or AT-Air
+    \Moves - 1 Else
+    \Moves - H(M(TX,TY,0)\HX)\MCost :EndIf
+
+  If \Fuel>0 AND (H(M(TX,TY,0)\HX)\CSize<10 OR NOT UNS)
+    \Fuel - 1
+    If \Fuel <= 0
+      Msg{"Out of Fuel"}
+      \Fuel = 0
+      If U(\T)\MType=#MT_AIR OR U(\T)\MType=#MT_AT_AIR : \Hits = 0 :EndIf :EndIf :EndIf
+
+  XTH = H(M(TX,TY,0)\HX)\Threat
+
+  If XTH>\TDef AND AIR=False
+    Damage = Rnd(XTH-\TDef)
+    If Damage>0
+      \Hits - Damage
+      If \TDef>0 : \TDef - 1 :EndIf
+      Msg{"Ter. Damage"} :EndIf :EndIf
+
+  ZeroLevel = False
+  If \Level<>0 AND (U(\T)\MType & H(M(TX,TY,0)\HX)\VChg)=0 : ZeroLevel = True :EndIf
+  If ZeroLevel : \Level=0 :EndIf
+
+  ex = \X
+  ey = \Y
+  \X = TX
+  \Y = TY
+  t  = \T : If \Level>0 : t = #LU + U(\T)\LUI :EndIf
+
+  If UNLOAD=False : Cui{ex,ey,#CREM,P,t} :EndIf
+                    Cui{\X,\Y,#CADD,P,t}
+  If (\Com=#C_MOVE_TO OR \Com=C_BUILD_R_TO) AND \X=\CX AND \Y=\CY : \Com = 0 :EndIf
+
+  vT = M(ex,ey,0)\HX
+  vU = M(ex,ey,0)\UI
+  Slide{ex,ey,TX,TY,\T+P*#UM,MoveSpeed}
+  UnBuffer 0
+
+  If ZeroLevel
+    HexCircle{#HC_VISIONIZE,TX,TY,0,U(\T)\Vision[0]}
+  EndIf
+
+  Gosub MV
+  Gosub PanelUnit
+
+  If \Hits<=0
+    Explo{\X,\Y}
+    UnitKill {U0,P,P,True}
+    Gosub Killed
+  EndIf
+  Return
+
+MovErr
+  MOK = True
+  If NOT MTP_FIT:Msg{"Not allowed"}:MOK=False:EndIf
+  If NOT MPS_FIT:Msg{"No Moves"}   :MOK=False:EndIf
+  If NOT UBI_FIT:Msg{"No TSpace"}  :MOK=False:EndIf
+  If NOT UNS_FIT:Msg{"No Space"}   :MOK=False:EndIf
+  Return
+
+
+
+
+UUV                                   ; Unit Update Visionize
+  HexCircle {#HC_VISIONIZE,\X,\Y,0,U(\T)\Vision[\Level]}
+  Return
+
+MV                                    ; Movement Visionize
+  Visionize {TX,TY,0}
+  Visionize {ex,ey,0}
+  HexCircle{#HC_VISIONIZE,TX,TY,U(\T)\Vision[\Level]-1,U(\T)\Vision[\Level]}
+
+  RepFlag = p2(B)
+  REP   = 1
+  Rep_P = P
+  Rep_U = U0
+  Rep_X = ex
+  Rep_Y = ey
+  VFrom = U(I(Rep_U,Rep_P)\T)\VFrom[\Level]
+  vfrom = VFrom-1 : If vfrom<0 : vfrom=0 :EndIf
+  HexCircle {#HC_REPORT,TX,TY,    0,VFrom}
+  HexCircle {#HC_REPORT,ex,ey,vfrom,VFrom}
+  Return
+
+
+
+
+
+
+
+Killed                                ; Mark this unit killed
+  If U>P(P)\unts : U = P(P)\unts :EndIf
+  u = U
+  Gosub SelB
+  Gosub Find
+  Return
+
+
+
+
+
+
+
+
+
+_SendMsg                              ; Send Message
+  p = P
+  If Players>2
+    Who$ = Req{"Send to:",#StrLen}
+    For tp=0 To Players-1
+      If Who$=PName$(tp) OR Who$=UStr$(tp+1) : p=tp :EndIf
+    Next
+  Else
+    p = 1-P
+  EndIf
+  If p=P :Return :EndIf
+
+  If P(P)\msgs>#Messages
+    Msg{"Msg. limit"} Else
+    P(P)\msgs + 1    :EndIf
+  If P(p)\cmbs>#Reps
+    Msg{"Rep. Limit"} Else
+    P(p)\cmbs + 1    :EndIf
+
+  Message$(P(P)\msgs,P) = Req{"",#MsgLen}
+
+  r = P(p)\cmbs
+  R(r,p)\Rep = #R_MESSAGE
+  R(r,p)\Fac = P
+  R(r,p)\Prd = P(P)\msgs
+  R(r,p)\x = \X
+  R(r,p)\y = \Y
+  R(r,p)\T = P*#UM
+  Return
+
+
+
+
+
+_Build                                ; Build city, road, field
+  Msg{"Build"}
+  If (U(\T)\Specials & rsa)=0 : Msg{"Can't"} :Return :EndIf
+  If \Com=com : \Com=0 : Gosub PanelUnit :Return :EndIf
+  c = H(M(\X,\Y,0)\HX)\CSize
+
+  If c=>rcs AND c<=mcs
+    If c=>rcs
+      \Com   = com
+      \CP[0] = ter                    ; Terrain
+      \CP[2] = c                      ; Curr. CSize (before build)
+      \PTime = tim                    ; Production Time
+      If tim=0 : Gosub Do_Build : Gosub UUV :EndIf
+      Gosub PanelUnit
+    EndIf
+  EndIf
+  Return
+
+
+
+
+
+_Capture                              ; Capture City / Factory
+  TX = \X
+  TY = \Y
+  Unitlist {TX,TY,0}
+  Gosub TargetCheck
+  Gosub MoveCheck
+
+  ui = M(\X,\Y,0)\UI-P*#UM
+  If H(M(\X,\Y,0)\HX)\CSize<10 : Msg{"Not City"} :Return :EndIf
+  If U(\T)\CAttack=0 : Msg{"Can't"} :Return :EndIf
+  If P(P)\facs=>#FMax : Msg{"Fac-Limit"} :Return :EndIf
+  For u=0 To P(P)\unts
+    If I(u,P)\X=\X AND I(u,P)\Y=\Y
+      t=I(u,P)\T
+      If t=>#F0 AND t<=#F1
+        Msg{"Other"}
+        Pop For
+        Return
+      EndIf
+    EndIf
+  Next
+
+  Msg{"City Cap."}
+  P(P)\facs + 1
+  n      = P(P)\facs
+  \T     = #F0+M(\X,\Y,0)\HX-#T_CITY
+  \Hits  = 8
+  \Com   = 0
+  \TDef  = 0
+  \Moves = 0
+  \Fuel  = 0
+  \Factory = n
+  cn$ = Req{"City Name:",#GnsLen}
+  If cn$="" : cn$ = "Unnamed" :EndIf
+  FName$(n,P) = cn$
+  TX = \X
+  TY = \Y
+  ex = \X
+  ey = \Y
+  Cui {\X,\Y,#CCIT,P,\T}
+  Gosub MV
+  Gosub UUV
+  Gosub _Activate
+  Return
+
+_Rename                               ; Rename City / Factory
+  If CSize>0
+    cn$ = Req{"City Name:",#GnsLen}
+    If cn$="" : cn$ = "Unnamed" :EndIf
+    FName$(\Factory,P) = cn$
+    Gosub PanelUnit
+  EndIf
+  Return
+
+
+
+
+
+
+
+
+
+_Load                                 ; Loading
+  If (U(\T)\Specials & #SA_NCITY_LOAD)=0 AND H(M(\X,\Y,0)\HX)\CSize<10 : Msg{"Only in City"} :Return :EndIf
+  HexCircle {#HC_SUB_LOAD,\X,\Y,0,1}
+  Gosub PanelUnit
+  Return
+
+
+
+
+._Unload                               ; Unloading
+  If \Loading => U(\T)\Loading : Msg{"ULoad Limit"} :Return :EndIf
+  eu = U0
+  u  = CLU(lu)
+  t  = I(u,P)\T
+  cs = (U(I(u,P)\T)\Hits/4)
+  I(u,P)\X = \X
+  I(u,P)\Y = \Y
+
+  PARACH = (U(I(u,p)\T)\Specials & #SA_HAS_PARACH)<>0
+  NO_REQ = (U(\T)\Specials & #SA_NPRCH_UNLOAD)<>0
+  CITY_H = H(M(\X,\Y,0)\HX)\CSize=>10
+  If AIR=True AND PARACH=False AND REQ_REQ=False AND CITY_H=False
+    Msg{"No Parach!"} :Return :EndIf
+
+  U0 = u
+  U  = u
+  Gosub Find : moved = False
+
+  Repeat
+    If NO_REQ=False
+      Gosub Interface Else
+      TX=\X:TY=\Y    :EndIf
+
+    If (NXTO AND MK=1) OR NO_REQ=True
+
+      Gosub MoveCheck
+      Gosub MovErr
+
+      If MOK AND PLY_FIT
+        \Com     = 0
+        \Carrier = 0
+        UNLOAD = True : Gosub MoveIt : UNLOAD = False
+        HexCircle{#HC_VISIONIZE,TX,TY,0,U(\T)\Vision[\Level]}
+        moved = True
+        U0 = eu
+        U  = eu
+        Gosub Find
+        \Loading + 1
+        \Cargo - cs
+        Msg{"Unloaded"}
+      Else
+        Msg{"Unload Failed"}
+      EndIf
+    Else
+      Msg{"Not a Move"}
+    EndIf
+  Until moved OR (TX=\X AND TY=\Y)
+  If moved=True : Gosub Find :EndIf
+  Return
+
+
+
+
+
+
+
+
+
+_SetProd                              ; Set Production
+  !ad{\Prod,DPS,0,#UTypes-1}
+  pt = U(\Prod)\BType : If pt=#BT_CITY OR pt=0 : pt=#BT_AIR :EndIf
+  If (\Prod=>#F0 AND \Prod<=#F1) OR U(\Prod)\PTime=0 OR U(\Prod)\Tech>P(P)\tech[pt-1]*TechF/10
+    Goto _SetProd
+  EndIf
+  If \Prod=0
+    \Com = 0
+    t = 0
+    p = 0
+    h = 0
+    Gosub PanelUI Else
+    \Com = 1     :EndIf
+  Gosub PanelHexCom
+  Gosub PanelMisc
+  Return
+_SetTempSentry     :m$="S. TSentry":c=#C_TEMP_SENTRY:Gosub set:Return
+_SetSentry         :m$="S. Sentry" :c=#C_SENTRY     :Gosub set:Return
+_SetReadyForLoading:m$="Prep. Load":c=#C_LOAD_PREP  :Gosub set:Return
+
+set                                   ; Sentry Setting
+  Msg{m$}
+  If \Com=0
+    \Com = c
+  Else
+    If \Com=c
+      \Com = 0
+    EndIf
+  EndIf
+  Gosub PanelHexCom
+  Return
+
+
+
+
+
+
+
+
+                                      ; Select First Active Unit
+SelectFirstActive
+  Msg{"Sel AFirst"}
+  U = 1 : SD = -1 : Gosub SelA
+  Return
+
+_SelectPanel                          ; Select Unit from Others in Hex List
+  Msg{"Select"}
+  Gosub _DeActivate
+  U  = oun(ou)
+  U0 = U
+  Gosub Find
+  Return
+
+._SelectTarget                        ; Select Unit from MainView
+  Msg{"Sel Targ"}
+  Gosub _DeActivate
+
+  If NOT SAME_HEX : N = 0 :EndIf
+  en = N
+
+  Repeat
+    !ad{N,1,0,hS(1)}
+  Until hP(N,1)=P OR N=en
+
+  U  = hN(N,1)
+  U0 = U
+  Gosub _Activate
+  Return
+
+_SelectNext :SD= 1:Gosub Sel:Return
+_SelectPrev :SD=-1:Gosub Sel:Return
+_SelectFirst:SD=-1:Gosub Sel:Return
+_SelectLast :U=P(P)\unts-1:SD= 1:Gosub Sel:Return
+
+Sel
+  Gosub _DeActivate : u = U
+  Repeat
+    !ad{U,SD,0,P(P)\unts} : U0 = U
+  Until \Com<>3 OR U=u
+  Gosub Find
+  Return
+
+
+
+
+_SelectNextAKeep :SD= 1:Gosub SelC:Return
+_SelectPrevAKeep :SD=-1:Gosub SelC:Return
+_SelectNextActive:SD= 1:Gosub SelA:Return
+_SelectPrevActive:SD=-1:Gosub SelA:Return
+
+SelA
+  Gosub _SetTempSentry
+  Gosub SelD
+  Return
+
+SelB
+  Gosub _DeActivate
+  Repeat
+    !ad{U,SD,0,P(P)\unts} : U0 = U
+  Until \Com=0 OR \Com=#C_PROD_HALTED OR \Com=#C_PROD_DONE OR \Com=#C_MOVE_TO OR \Com=#C_CAPTURE OR U=u
+  Return
+
+SelC
+  Gosub _DeActivate : If \Com = #C_TEMP_SENTRY : \Com = 0 :EndIf
+  Gosub SelD
+  Return
+
+SelD
+  If U>P(P)\unts : U = P(P)\unts :EndIf
+  u = U
+  Gosub SelB
+  Gosub Find
+  Return
+
+
+
+
+
+
+
+BValueCalc
+  AV = U(at)\Attack  [db] * av / 10
+  DV = U(dt)\Defence [ab] * dv / 10
+
+  If al>0 : AV * U(at)\LAtt / 10 :EndIf  ; Level Modifiers
+  If dl>0 : DV * U(dt)\LDef / 10 :EndIf  ;
+
+  If U(dt)\MType=4              : AV * U(at)\LgtGndMod         / 10 :EndIf  ; Light Ground Modifier
+  If H(M(dx,dy,0)\HX)\CSize=>10 : AV * U(at)\CAttack           / 10 :EndIf  ; City Attack Modifier
+  If FF                         : AV * U(at)\RAttack           / 10 :EndIf  ; Artillery Attack Modifier
+  If U(dt)\MType>%11            : DV * H(M(dx,dy,0)\HX)\DBonus / 10 :EndIf  ; Terrain Defence Bonus
+  Return
+
+.PanelUnit                          ; InfoPanel Updates
+  Format "#0" : !Clin{0,0,4,#LL,CS} : E=255
+  FNSInk C3
+  FNSOrigin PNX(2),PYY+(#TL+2)*#FYS
+  FNSPrint 1,0,0*#FYS,"Air"
+  FNSPrint 1,0,1*#FYS,"Gnd"
+  FNSPrint 1,0,2*#FYS,"Sea"
+  FNSPrint 1,0,3*#FYS,"Sub"
+  FNSPrint 1,0,4*#FYS,"TDf"
+  FNSPrint 1,0,5*#FYS,"LGM"
+  FNSPrint 1,0,6*#FYS,"C/R"
+  FNSOrigin
+  Gosub PanelBat
+  Gosub HexUnits
+  Gosub PanelHexCom
+  Gosub PanelHMFT
+  Gosub PanelMisc
+  U0 = U
+  Return
+
+PanelBat                              ; Battle Values Update
+  BT = U(\T)\BType-1 : If BT=#BT_CITY-1 : BT = #BT_GND-1 :EndIf
+  FNSOrigin PNX(3),PYY
+  For b=0 To 3
+    If E=b
+      FNSInk C4
+      FNSPrint 1,0,(BT+#BL+2)*#FYS,Str$(U(t)\Attack[BT])+":"+Str$(U(t)\Defence[BT])
+    Else
+      FNSInk CB
+    EndIf
+    att=U(\T)\Attack [b]*(\Vet)/10
+    def=U(\T)\Defence[b]*(\Vet)/10
+    FNSPrint 1,0,(#TL+2+b)*#FYS,Str$(att)+":"+Str$(def)
+  Next
+  FNSPrint 1,0,(#TL+6)*#FYS,Str$(\TDef)+"/"+Str$(U(\T)\TDef),0,CB
+  FNSPrint 1,0,(#TL+7)*#FYS,"   "+Str$(U(\T)\LgtGndMod),0,CB
+  FNSPrint 1,0,(#TL+8)*#FYS,Str$(U(\T)\CAttack)+"/"+Str$(U(\T)\RAttack),0,CB
+  FNSOrigin
+  Return
+
+PanelHMFT                             ; HitPoints, Moves, Fuel etc. Update
+  Format "#0" : !Clin{0,#TL+2,2,#TL+#TS,CS}
+  FNSInk C3
+  FNSOrigin PNX(0),PYY+(#TL+2)*#FYS
+  FNSPrint 1,0,0*#FYS,"HP"
+  FNSPrint 1,0,1*#FYS,"MP"
+  FNSPrint 1,0,2*#FYS,"FU"
+  FNSPrint 1,0,3*#FYS,"RG"
+  FNSPrint 1,0,4*#FYS,"XP"
+  FNSPrint 1,0,5*#FYS,"AM"
+  FNSPrint 1,0,6*#FYS,"VR"
+  FNSInk CB
+  FNSOrigin PNX(1),PYY+(#TL+2)*#FYS
+  FNSPrint 1,0,0*#FYS,Str$(\Hits) +"/"+Str$(U(\T)\Hits)
+  FNSPrint 1,0,1*#FYS,Str$(\Moves)+"/"+Str$(U(\T)\Moves[\Level])
+  FNSPrint 1,0,2*#FYS,Str$(\Fuel) +"/"+Str$(U(\T)\Fuel)
+  FNSPrint 1,0,3*#FYS,Str$(U(\T)\Shots-\FarF)+"/"+Str$(U(\T)\Range[\Level])
+  FNSPrint 1,0,4*#FYS,Str$(\Vet)+"/10"
+  FNSPrint 1,0,5*#FYS,Str$(\Ammo)+"/"+Str$(U(\T)\Ammo)
+  FNSPrint 1,0,6*#FYS,Str$(U(\T)\Vision[\Level])+"/"+Str$(U(\T)\VFrom[\Level])
+  FNSOrigin
+  Return
+
+PanelHexCom                         ; Terrain Hex & Orders Update
+  Format "#0" : !Clin{0,#TL,4,#TL+2,CS}
+  Blit #Vgr_Sps+2,Xi,Yi+#TL*#FYS,0
+  Blit #Unt_Sps+\T,Xi,Yi+#TL*#FYS,P
+  FNSInk C4
+  If \Com=#C_BUILD
+    l$ = HName$(\CP[0])+" "+UStr$(\PTime) Else
+    l$ = "" :EndIf
+  FNSPrint 1,PNX(1),PYY+(#TL+1)*#FYS,Com$(\Com)+l$
+  Gosub PanelHex
+  Return
+
+.PanelHex                             ; Terrain Hex Info Update
+  Format "#0" : !Clin{0,#HL,4,#HL+#HS,CS}
+  h = M(TX,TY,B)\HX
+  Blit #Ter_Sps+h,Xi,Yi+#HL*#FYS,0
+  FNSPrint 1,PNX(1),PYY+#HL*#FYS,HName$(H(h)\HNum)+" "+Str$(D),0,CY
+  mc = H(h)\MCost
+  db = H(h)\DBonus
+  th = H(h)\Threat
+  t$ = "M:"+Chr$(1)+Chr$(CB)+Str$(mc)+Chr$(1)+Chr$(C3)
+  t$ +" B:"+Chr$(1)+Chr$(CB)+Str$(db)+Chr$(1)+Chr$(C3)
+  t$ +" T:"+Chr$(1)+Chr$(CB)+Str$(th)
+  FNSPrint 1,PNX(1),PYY+(#HL+1)*#FYS,t$,0,C3
+  Return
+
+PanelMisc                             ; Cargo / Production etc. Update
+  Format "#0" : !Clin {0,#BL,4,#BL+2,CS}
+  LUS = -1
+  Blit #Vgr_Sps+2,Xi,Yi+#BL*#FYS,0
+  t = \Prod
+  p = P
+  If \Prod=0
+    !Clin {0,#BL+2,4,#BL+#BS,CS}
+    Goto carpan :EndIf
+
+.
+  PMod = U(t)\PTime*10/H(M(\X,\Y,0)\HX)\CSize*ProdF/10
+
+  FNSPrint 1,PNX(1),PYY+(#BL+1)*#FYS,"Time: "+UStr$(\PTime)+"/"+Str$(PMod),0,CY
+  Gosub PanelUI
+  I$(1,1) = FName$(\Factory,P)
+  I$(1,2) = I$(1,0)
+  Return
+
+.PanelUI                              ; Lower Unit Info Update
+  If TRANS : Return :EndIf            ; Some cargo...
+  Format "#0"
+  !Clin {0,#BL,4,#BL+1,CS}
+  !Clin {0,#BL+2,4,#BL+#BS,CS}
+
+  Blit #Vgr_Sps+2,Xi,Yi+#BL*#FYS,0
+  Blit #Unt_Sps+t,Xi,Yi+#BL*#FYS,p
+  FNSInk CY
+
+  If t=>#HC AND t<=#HC+5 AND p<>P
+    Return
+  EndIf
+
+  If t=>#MT AND t<#MP
+    Gosub uisub1
+    p=P:Gosub uisub2
+  EndIf
+
+  If t=>#MP
+    Gosub uisub1
+    For p=0 To Players-1
+      If (mpi(t-#MP) & p2(p+1))<>0
+        Gosub uisub2
+      EndIf
+    Next
+  EndIf
+
+  If t=0 OR t=>#LU+#UW
+    TLeft   = Turns_Done-Turns : If TLeft<0 : TLeft=0 :EndIf
+    I$(1,0) = "Turns :"+UStr$(TLeft)+":"+UStr$(Turn)
+    I$(1,1) = PName$(P)
+    I$(1,2) = UStr$(\ProdNo+1)+"/"+UStr$(P(P)\unts+1)
+    E = 255 : Gosub PanelBat
+    Return
+  EndIf
+  If t=>#LU
+    t = lui_rev(t-#LU)
+  EndIf
+
+  USEPATH U(t)
+  E = \BType-1 : If E=4 : E = 1 :EndIf
+
+  I$(1,1) = PName$(p) ;"Factory ?"    ; FName$(\Factory,p)
+  I$(1,2) = PName$(p) ;"Product ?"    ; UStr$(\ProdNo)+". unit"
+  If t2=>#F0 AND t2<=#F1
+    I$(1,0) = I$(1,1)    Else
+    I$(1,0) = UName$(t) :EndIf
+
+  If \Levels=0 : TLevel = 0 :EndIf
+
+  FNSInk C3
+  FNSOrigin PNX(0),PYY+(#BL+2)*#FYS
+  FNSPrint 1,0,0*#FYS,"HP"
+  FNSPrint 1,0,1*#FYS,"MP"
+  FNSPrint 1,0,2*#FYS,"FU"
+  FNSPrint 1,0,3*#FYS,"RG"
+  FNSPrint 1,0,4*#FYS,"SH"
+  FNSPrint 1,0,5*#FYS,"AM"
+  FNSPrint 1,0,6*#FYS,"VR"
+  FNSOrigin PNX(2),PYY+(#BL+2)*#FYS
+  FNSPrint 1,0,0*#FYS,"Air"
+  FNSPrint 1,0,1*#FYS,"Gnd"
+  FNSPrint 1,0,2*#FYS,"Sea"
+  FNSPrint 1,0,3*#FYS,"Sub"
+  FNSPrint 1,0,4*#FYS,"TDf"
+  FNSPrint 1,0,5*#FYS,"LGM"
+  FNSPrint 1,0,6*#FYS,"C/R"
+  FNSInk CB
+  FNSOrigin PNX(1),PYY+(#BL+2)*#FYS
+  FNSPrint 1,0,0*#FYS,Str$(\Hits)
+  FNSPrint 1,0,1*#FYS,Str$(\Moves)
+  FNSPrint 1,0,2*#FYS,Str$(\Fuel)
+  FNSPrint 1,0,3*#FYS,Str$(\Range[TLevel])
+  FNSPrint 1,0,4*#FYS,Str$(\Shots)
+  FNSPrint 1,0,5*#FYS,Str$(\Ammo)
+  FNSPrint 1,0,6*#FYS,Str$(\Vision[TLevel])+"/"+Str$(\VFrom[TLevel])
+  FNSOrigin PNX(3),PYY+(#BL+2)*#FYS
+  For b=0 To 3
+    FNSPrint 1,0,b*#FYS,Str$(\Attack[b])+":"+Str$(\Defence[b])
+  Next
+  FNSPrint 1,0,4*#FYS,"   "+Str$(\TDef)
+  FNSPrint 1,0,5*#FYS,"   "+Str$(\LgtGndMod)
+  FNSPrint 1,0,6*#FYS,Str$(\CAttack)+"/"+Str$(\RAttack)
+  FNSOrigin
+  Gosub PanelBat
+  Return
+  USEPATH I(U0,P)
+
+.HexUnits
+  Gosub uisub1:TX=\X:TY=\Y:p=P:Gosub uisub2
+  Return
+
+uisub1
+  OUS = 0
+  oux = 0
+  ouy = 0
+  For y=0 To 1
+    For x=0 To 6
+      Blit #Vgr_Sps+2,Xi+#HXX*x,YI+#HYY*y,0
+    Next
+  Next
+  Return
+
+uisub2
+  If M(TX,TY,0)\UI<#MT :Return :EndIf
+  For u=0 To P(p)\unts
+    If I(u,p)\X=TX AND I(u,p)\Y=TY AND OUS<#Units_Hex AND I(u,p)\Com<>#C_TRANSPORT AND (u<>U0 OR p<>P)
+      Blit #Unt_Sps+I(u,p)\T,Xi+#HXX*oux,YI+#HYY*ouy,p
+      oun(OUS) = u
+      OUS + 1
+      oux + 1
+      If oux=7 : oux = 0 : ouy + 1 :EndIf
+    EndIf
+  Next
+  Return
+
+carpan                                ; CargoList Update
+  If \Cargo=0 AND U(\T)\Cargo=0 :Return :EndIf
+  !Clin {0,#BL,4,#BL+#BS-1,CS}
+  lux = 0
+  luy = 0
+  For u=0 To P(P)\unts
+    If I(u,P)\Com=3 AND I(u,P)\Carrier=\ProdNo
+      Blit #Vgr_Sps+2,Xi+#HXX*lux,PYY+(#BL+1)*#FYS+#HYY*luy,0
+      Blit #Unt_Sps+I(u,P)\T,Xi+#HXX*lux,PYY+(#BL+1)*#FYS+#HYY*luy,P
+      LUS      + 1
+      CLU(LUS) = u
+      lux      + 1
+      If lux=7
+        lux = 0
+        luy + 1
+      EndIf
+    EndIf
+  Next
+  FNSPrint 1,PNX(2),PYY+#BL*#FYS,"Crg",0,C3
+  FNSPrint 1,PNX(3),PYY+#BL*#FYS,Str$(\Cargo)+":"+Str$(U(\T)\Cargo),0,CB
+  Return
+CEND
+
+
+
+
+
+
+
+
+.DefsLoad                             ; Load Default Definitions
+  If ReadFile(0,D$+"Hex.Def") : FileInput 0
+    For t=0 To #HTypes : !ld{H(t)\Color,H(t)\HNum} :Next
+    For t=0 To #HTypes : !ls{HName$(t),#lStrLen} :Next
+    CloseFile 0
+  EndIf
+  Gosub MiscDefs
+  If ReadFile(0,D$+"Unit.Def") : FileInput 0
+    For t=0 To #UTypes : !ld{U(t)\MType,U(t)\L} :Next
+    For t=0 To #UTypes : !ls{UName$(t),#lStrLen} :Next
+    CloseFile 0
+  EndIf
+  CNIF #DM=1
+  f$=M$+"Default"
+  If ReadFile(0,f$) : FileInput 0
+    !li{MXX}
+    !li{MYY}
+    For y=0 To MYY : !ld{M(0,y,0)\HX,M(MXX,y,0)\UI} :Next
+    CloseFile 0
+    IoOk = True
+    Gosub MapFit
+  Else
+    IoOk = False
+  EndIf
+  CEND
+  Use Window 0
+  Return
+
+.MiscDefs                             ; Copy Hex Defs to MultiHexs, Define Icon Ranges
+  For m=0 To #Multis-1
+    OH = m(m)\a
+    MH = H(OH)\HNum
+    o  = #HTypes+m*64
+    h0 = &H(MH)\Color
+    h1 = &H(MH)\HNum
+    For t=0 To 62
+      h2=&H(o+t)\Color
+      For ca=h0 To h1 : Poke.b h2,Peek.b(ca) : h2+1 :Next
+      H(o+t)\HNum=MH
+    Next
+    h0 = &H(OH)\Color
+    h1 = &H(OH)\HNum
+    t = 63
+    h2=&H(o+t)\Color
+    For ca=h0 To h1 : Poke.b h2,Peek.b(ca) : h2+1 :Next
+    H(o+t)\HNum=H(MH)\HNum
+  Next
+  For t=0 To #HTypes:HName$(t)=Left$(HName$(t),#tStrLen):Next
+  For t=0 To #UTypes:UName$(t)=Left$(UName$(t),#tStrLen):Next
+
+  CNIF #GM=1
+  For t=0 To #UM : IR(t)=4 :Next
+  For t=0 To #UTypes
+    IR(t) = U(t)\VFrom[0]
+    If U(t)\Levels>0 AND U(t)\VFrom[1]>0
+      lui = U(t)\LUI
+      IR(#LU+lui) = U(t)\VFrom[1]
+      lui_rev(lui)=t
+    EndIf
+  Next
+  CEND
+
+  Return
+
+
+
+
+
+MapLoad                               ; Load Map File
+  ShowScreen 0
+  RTEZSetDefaultDirectory 0,M$
+  mf$ = RTEZLoadFile("Load Map",mf$)
+  mf$ = FN{mf$}
+  If ReadFile(0,mf$) : FileInput 0
+    !li{MXX}
+    !li{MYY}
+    For y=0 To MYY : !ld{M(0,y,0)\HX,M(MXX,y,0)\UI} :Next
+    CloseFile 0
+    IoOk = True
+    Gosub MapFit
+    Use Window 0
+  Else
+    IoOk = False
+  EndIf
+  Return
+
+
+
+
+CNIF #GM=1
+GameSave                              ; Save Game File
+  ShowScreen 0
+  RTEZSetDefaultDirectory 1,G$
+  gf$ = RTEZSaveFile("Save Game",gf$)
+  gf$ = FN{gf$}
+  If WriteFile(0,gf$) : FileOutput 0
+    #IO = 1
+    !GameIO
+    IoOk = True
+    Use Window 0
+  Else
+    IoOk = False
+  EndIf
+  Return
+
+GameLoad                              ; Load Game File
+  ShowScreen 0
+  RTEZSetDefaultDirectory 0,G$
+  gf$ = RTEZLoadFile("Load Game",gf$)
+  gf$ = FN{gf$}
+  If ReadFile(0,gf$) : FileInput 0
+    #IO = 0
+    !GameIO
+    IoOk = True
+    Use Window 0
+  Else
+    IoOk = False
+  EndIf
+  Return
+CEND
+
+
+CNIF #ED=1
+USEPATH M(TX,TY,0)
+.EDITORS
+  KED = True : P = -1 : B = 0 : RepSFlag = 1
+  Repeat
+    s = OptSel {5}
+    Select s
+      Case 1 : Map_Type = 0 : Gosub KARTTA_ED
+      Case 2 : Gosub MapLoad
+      Case 3 : Gosub MapSave
+      Case 4 : CNIF #DF=1 : Gosub HexDefiner  :CEND
+      Case 5 : CNIF #DF=1 : Gosub UntsDefiner :CEND
+    End Select
+  Until s=6
+
+  CNIF #GM=0
+  Gosub Rs
+  End
+  CELSE
+  Return
+  CEND
+
+KARTTA_ED
+  Gosub GameScreen
+  mode  = 0
+  LX    = MPX
+  LY    = MPY
+  SU    = 0
+  BSize = 0
+  LEFT  = #T_PLAIN
+  RIGHT = #T_MED_WAT
+  Z     = 1
+
+  kartaloitus
+  Cls CS : Box PXX,PYY,PXX+PGX-1,PYY+PGY-2,C3
+  yp  = PYY+2
+  SNO = #Ter_Sps
+  For y=0 To #HTypes/5-1
+    For x=0 To 4
+      Blit SNO,PXX+4+#HXX*x,yp+#HYY*y,0 : SNO + 1
+    Next
+  Next
+  lx = PXX+5+#HXX*5 : ly = yp+#HYY*1+1 : Blit #Ter_Sps+LEFT   ,lx,ly,0
+  sx = PXX+5+#HXX*5 : sy = yp+#HYY*2+1 : Blit #grd_Sps+1+BSize,sx,sy,0
+  rx = PXX+5+#HXX*5 : ry = yp+#HYY*3+1 : Blit #Ter_Sps+RIGHT  ,rx,ry,0
+  MSRestore {0}
+  Gosub Kartta
+  Gosub Border
+
+  kartalku
+  X  = SMouseX
+  Y  = SMouseY
+  HX = (X-(#HXX-#HDX)/2-SXA)/#HDX
+  If HX & 1
+    HY = (Y-SYA)/#HYY      Else
+    HY = (Y-#HDY-SYA)/#HYY:EndIf
+  Isolla  = (HX=>0 AND HY=>0 AND HX<WXX AND HY<WYY)
+  Minilla = (X=>WXw(Z) AND Y=>WYw(Z) AND X<=WXr(Z) AND Y<=WYr(Z))
+  If Minilla
+    TX = LX+((X-WXd(Z)-1)/(Z+1))
+    TY = LY+((Y-WYd(Z)-1+(TX & 1)*Z-Z)/(Z+1))  Else
+    TX = LX+HX
+    TY = LY+HY :EndIf
+  Gosub sTXTY
+
+  If Joyb(0)=1 : Brush = LEFT  :EndIf
+  If Joyb(0)=2 : Brush = RIGHT :EndIf
+  If (Joyb(0)=1 AND (Isolla OR Minilla)) OR (Joyb(0)=2 AND Isolla)
+    If BSize>0
+      HexCircle {#HC_SUB_MAP_ED,TX,TY,0,BSize}
+    Else
+      vC  = H(Brush)\Color
+      \HX = Brush
+      vT  = \HX
+      vU  = 0
+      Vgrfx {TX,TY}
+    EndIf
+    ReCorr = False : n = 0 : ps = BSize : If ps=0 : ps=1 :EndIf
+    Repeat
+      HexCircle {#HC_MS_CORR,TX,TY,ps-1,ps+1}
+      n + 1
+    Until ReCorr=False OR n=2
+    Goto kartalku
+  EndIf
+
+  If Joyb(0)=2 AND Minilla : Gosub SkrolTo :EndIf
+  A$ = Inkey$
+  If A$="T"
+    For y=0 To MYY-1
+      For x=0 To MXX-1
+        Blit #Ztr_Sps+H(M(x,y,0)\HX)\HNum,x*2,y*2
+      Next
+    Next
+  EndIf
+  If A$="b"
+    !ad{BSize,1,0,3}
+    Blit #Ter_Sps,sx,sy,0
+    Blit #grd_Sps+1+BSize,sx,sy,0
+  EndIf
+  If A$="`" OR A$=" " : Z = 1-Z : Boxf WXA,WYA,WXB-1,WYB-1,0 : Gosub MapFresh :EndIf
+  If A$="g" : GRD + 1 : If GRD>2 : GRD=0 :EndIf : Gosub Kartta :EndIf
+  If A$="q" : Return :EndIf
+  If A$="o" : Gosub _Map :EndIf
+  If A$="s"
+    S$  = Req{"Map Size "+UStr$(MXX)+","+UStr$(MYY)+" >",7}
+    p   = Instr(S$,",")
+    MXX = Val(Left$(S$,p))
+    MYY = Val(UnRight$(S$,p))
+    If MXX< WXX:MXX=(WXX & NOT 3)+4:EndIf
+    If MXX>#MMX:MXX=#MMX:EndIf
+    If MYY< WYY:MYY=(WYY & NOT 3)+4:EndIf
+    If MYY>#MMY:MYY=#MMY:EndIf
+    MXX & NOT 3
+    MYY & NOT 3
+    Gosub MapFit
+    Gosub Kartta
+  EndIf
+  If A$="f"
+    For y=0 To MYY-1
+      For x=0 To MXX-1
+        M(x,y,0)\HX = LEFT
+      Next
+    Next
+    c = H(LEFT)\Color
+    Use BitMap #MBM : Cls c : Use BitMap #GBM
+    Gosub Kartta
+    Use BitMap #ZBM : Cls c
+    Use BitMap #GBM : Boxf WXA,WYA,WXB-1,WYB-1,0
+    Boxf WXw(Z),WYw(Z),WXr(Z)-1,WYr(Z)-1,c
+  EndIf
+  DX = 0
+  DY = 0
+  If A$=Cu$:DY=-Skrol:Gosub Skrol:EndIf
+  If A$=Cr$:DX= Skrol:Gosub Skrol:EndIf
+  If A$=Cd$:DY= Skrol:Gosub Skrol:EndIf
+  If A$=Cl$:DX=-Skrol:Gosub Skrol:EndIf
+  If X=>PXX+4 AND X<PXX+4+#HXX*5 AND Y=>yp AND Y<yp+#HYY*#HTypes/5
+    IC = (X-(PXX+4))/#HXX+((Y-yp)/#HYY)*5
+    For i=0 To #Multis-1 : If m(i)\a=IC : IC = #Mul_ofs+i*64+63 :EndIf :Next
+    If Joyb(0)=1 : LEFT  = IC : Blit #Ter_Sps+LEFT ,lx,ly,0 :EndIf
+    If Joyb(0)=2 : RIGHT = IC : Blit #Ter_Sps+RIGHT,rx,ry,0 :EndIf
+  EndIf
+  Goto kartalku
+
+CNIF #DF=1
+.DEFINER
+  Format "##":DefaultIDCMP $448:DFX=725:DFY=465:SCX=DFX/8-2:SCY=DFY/8-4
+  Screen 3,0,0,DFX,DFY,2,$8004,"PowerBattle Definer",1,1
+  Window 2,0,0,DFX,DFY,$1006,DefTitle$,1,1,0:Format ""
+  PX(0)=1:L=5:For t=0 To Types-1:l=Len(TName$(t))+1:If l>L:L=l:EndIf:Next
+  PX(1)=PX(0)+L:For d=0 To Defs-1:l=Len(Def$(d))+1:If l<4:l=4:EndIf:PX(d+2)=PX(d+1)+l:Next
+  t=0:o=0:td=0:ot(0)=0:While t<Types:While t-td+4<SCY AND t<Types:t+1:Wend:o+1:ot(o)=t:td=t:Wend
+  d=0:o=0:dd=0:od(0)=0:xg=0:While d<Defs:While PX(d+2)-xg<SCX AND d<Defs:d+1:Wend:o+1:od(o)=d:dd=d:xg=PX(dd+1)-PX(1):Wend
+  ot=0:od=0:td=ot(ot):dd=od(od):Gosub DefScreen
+  t=0:d=0:et=0:ed=0:x1=PX(1):y1=4:A$=""
+  defloop:Wait:x=WMouseX/8+xg:y=WMouseY/8+td:MB=MButtons
+  If MB=1:t=y-5:d=-1:For i=0 To Defs:If x=>PX(i):d=i-1:EndIf:Next:EndIf
+  If Instr(intstring$,A$)>0 AND A$<>"":a$=A$:A$="" Else a$=Inkey$:EndIf
+  If dm<Defs :If a$="]":od+1:dd=od(od):Gosub DefScreen:EndIf:EndIf
+  If tm<Types:If a$="+":ot+1:td=ot(ot):Gosub DefScreen:EndIf:EndIf
+  If od>0    :If a$="[":od-1:dd=od(od):Gosub DefScreen:EndIf:EndIf
+  If ot>0    :If a$="-":ot-1:td=ot(ot):Gosub DefScreen:EndIf:EndIf
+  If a$=Cu$ AND t=>td:t-1:EndIf:If a$=Cd$ AND t<tm-1:t+1:EndIf
+  If a$=Cl$ AND d=>dd:d-1:EndIf:If a$=Cr$ AND d<dm-1:d+1:EndIf
+  x0=PX(d+1)-xg:y0=4+t-td:xn=PX(d+2)-xg-x0-1
+  tg=(t=>td AND t<tm):dg=(d=>dd AND d<dm)
+  If t=td-1 AND d<dd AND MB=1:CloseWindow2:CloseScreen2:Return:EndIf
+  If ((tg AND dg) OR (t=td-1 AND dg) OR (d=dd-1 AND tg))
+   If a$="`":Repeat:a$=Inkey$
+     If a$=Cr$:d1=d+1:If d1=Defs:d1=0:EndIf
+      For t=0 To Types-1:d0=DAT(d,t):DAT(d,t)=DAT(d1,t):DAT(d1,t)=d0:Next
+      d0$=Def$(d):Def$(d)=Def$(d1):Def$(d1)=d0$:EndIf
+     If a$=Cl$:d1=d-1:If d1=-1:d1=Defs-1:EndIf
+      For t=0 To Types-1:d0=DAT(d,t):DAT(d,t)=DAT(d1,t):DAT(d1,t)=d0:Next
+      d0$=Def$(d):Def$(d)=Def$(d1):Def$(d1)=d0$:EndIf
+     If a$=Cd$:t1=t+1:If t1=Types:t1=0:EndIf
+      For d=0 To Defs-1:t0=DAT(d,t):DAT(d,t)=DAT(d,t1):DAT(d,t1)=t0:Next
+      t0$=TName$(t):TName$(t)=TName$(t1):TName$(t1)=t0$:EndIf
+     If a$=Cu$:t1=t-1:If t1=-1:t1=Types-1:EndIf
+      For d=0 To Defs-1:t0=DAT(d,t):DAT(d,t)=DAT(d,t1):DAT(d,t1)=t0:Next
+      t0$=TName$(t):TName$(t)=TName$(t1):TName$(t1)=t0$:EndIf
+    Until Instr(Cm$,a$)>0 AND a$>"":Gosub DefScreen:Goto defloop:EndIf
+   If Instr(intstring$,a$)>0 AND a$<>"":a$="":EndIf:WColour 2
+   If t>td-1:Text{PX(0),y0,TName$(t)}:EndIf
+   If d>dd-1:Text{x0,3,Def$(d)}:EndIf
+   If t>td-1 AND d>dd-1:USText{2,x0,y0,DAT(d,t)}:EndIf
+   If et<>t OR ed<>d
+    If et<>t AND et>td-1:CText{1,PX(0),y1,TName$(et)}:EndIf
+    If ed<>d AND ed>dd-1:CText{1,x1,3,Def$(ed)}:EndIf
+    If (et<>t OR ed<>d) AND (et>td-1 AND ed>dd-1):USText{1,x1,y1,DAT(ed,et)}:EndIf
+    et=t:ed=d:x1=x0:y1=y0:EndIf
+   If a$>""
+    If t>td-1 AND t<Types AND d>dd-1
+     pv.l=DAT(d,t):If pv<0:pv+256:EndIf:q$=Str$(pv)
+     USText{0,x0,y0,DAT(d,t)}:WColour2:WLocate x0*8,y0*8
+     q$=Edit$(q$,4):q=Val(q$):CText{0,x0,y0,q$}
+     If q=>0 AND q<256:DAT(d,t)=q:EndIf:USText{2,x0,y0,DAT(d,t)}:EndIf
+    If t=td-1 AND d>dd-1
+     q$=Def$(d):CText{0,x0,3,q$}:WColour2:WLocate x0*8,y0*8
+     q$=Edit$(q$,xn):CText{0,x0,3,q$}
+     If q$>"":Def$(d)=q$:EndIf:CText{2,x0,3,Def$(d)}:EndIf
+    If d=dd-1 AND t>td-1 AND t<Types
+     q$=TName$(t):CText{0,PX(0),y0,q$}:WColour2:WLocate x0*8,y0*8
+     q$=Edit$(q$,xn):CText{0,PX(0),y0,q$}
+     If q$>"":TName$(t)=q$:EndIf:CText{2,1,y0,TName$(t)}:EndIf:EndIf:EndIf
+  Goto defloop
+  DefScreen:InnerCls:CText{1,1,3,"EXIT"}:t=td:While t<Types AND t-td+3<SCY:Text{PX(0),4+t-td,TName$(t)}:t+1:Wend:tm=t:d=dd
+  xg=PX(dd+1)-PX(1):While d<Defs AND PX(d+2)-xg<SCX:Text{PX(d+1)-xg,3,Def$(d)}:For t=td To tm-1
+  USText{1,PX(d+1)-xg,4+t-td,DAT(d,t)}:Next:d+1:Wend:dm=d:t=td:d=dd:et=t:ed=d:x1=PX(d+1)-xg:y1=4+t-td:a$="":Return
+
+.HexDefiner
+  Types     = #HTypes
+  Defs      = #HDefs
+  LDefs     = #LHDefs
+  tname$    = "Hex.Def"
+  DefTitle$ = "Hex Type Defs"
+  For t=0 To Types-1 : TName$(t) = HName$(t) :Next
+  For d=0 To Defs-1  : Def$  (d) = HDef$ (d) :Next
+  CNIF #HX=1
+  Gosub DatLoad
+  CEND
+  Gosub DEFINER
+  Gosub DatSave
+  CNIF #HX=1
+  Gosub HexsLoad
+  CEND
+  Return
+
+.UntsDefiner
+  Types     = #UTypes
+  Defs      = #UDefs
+  LDefs     = #LUDefs
+  tname$    = "Unit.Def"
+  DefTitle$ = "Unit Type Defs"
+  For t=0 To Types-1 : TName$(t) = UName$(t) :Next
+  For d=0 To Defs-1  : Def$  (d) = UDef$ (d) :Next
+  CNIF #UN=1
+  Gosub DatLoad
+  CEND
+  Gosub DEFINER
+  Gosub DatSave
+  CNIF #UN=1
+  Gosub UntsLoad
+  CEND
+  Return
+
+
+.EdIO
+DatSave:If WriteFile(0,D$+tname$):FileOutput 0
+  For t=0 To Types:!sd{DAT(0,t),DAT(Defs-1,t)}:Next
+  For t=0 To Types:!ss{TName$(t),#sStrLen}:Next
+  For d=0 To Defs :!ss{Def$(d),#sStrLen}:Next
+  CloseFile 0:Use Window 0:EndIf:Return
+DatLoad:If ReadFile(0,D$+tname$):FileInput 0
+  For t=0 To Types:!ld{DAT(0,t),DAT(LDefs-1,t)}:Next
+  For t=0 To Types:!ls{TName$(t),#lStrLen}:Next
+  For d=0 To LDefs:!ls{Def$(d),#lStrLen}:Next
+  CloseFile 0:Use Window 0:EndIf:Return
+HexsSave:If WriteFile(0,D$+"Hex.Def"):FileOutput 0
+  For t=0 To #HTypes:!sd{H(t)\Color,H(t)\HNum}:Next
+  For t=0 To #HTypes:!ss{HName$(t),#sStrLen}:Next
+  For d=0 To #HDefs :!ss{HDef$(d),#sStrLen}:Next
+  CloseFile 0:Use Window 0:EndIf:Return
+HexsLoad:If ReadFile(0,D$+"Hex.Def"):FileInput 0
+  For t=0 To #HTypes:!ld{H(t)\Color,H(t)\HNum}:Next
+  For t=0 To #HTypes:!ls{HName$(t),#lStrLen}:Next
+  For d=0 To #LHDefs:!ls{HDef$(d),#lStrLen}:Next
+  CloseFile 0:Use Window 0:EndIf:Gosub MiscDefs:Return
+UntsSave:If WriteFile(0,D$+"Unit.Def"):FileOutput 0
+  For t=0 To #UTypes:!sd{U(t)\MType,U(t)\L}:Next
+  For t=0 To #UTypes:!ss{UName$(t),#sStrLen}:Next
+  For d=0 To #UDefs :!ss{UDef$(d),#sStrLen}:Next
+  CloseFile 0:Use Window 0:EndIf:Return
+UntsLoad:If ReadFile(0,D$+"Unit.Def"):FileInput 0
+  For t=0 To #UTypes:!ld{U(t)\MType,U(t)\L}:Next
+  For t=0 To #UTypes:!ls{UName$(t),#lStrLen}:Next
+  For d=0 To #LUDefs:!ls{UDef$(d),#lStrLen}:Next
+  CloseFile 0:Use Window 0:EndIf:Return
+CEND
+MapSave:ShowScreen 0:RTEZSetDefaultDirectory 1,M$:mf$=RTEZSaveFile("Save Map",mf$):mf$=FN{mf$}
+  If WriteFile(0,mf$):FileOutput 0
+    !si{MXX}:!si{MYY}:For y=0 To MYY:!sd{M(0,y,0)\HX,M(MXX,y,0)\UI}:Next
+    CloseFile 0:Use Window 0:IoOk=True Else IoOk = False:EndIf:Return
+CEND
+
+
+
+CNIF #GM=1
+INCDIR ""
+Even
+Font1 : IncBin "FNS:GTBMenu.FNS"
+Even
+Font2 : IncBin "FNS:PB_num.FNS"
+CEND
+
+
+
+
+
+
+
+

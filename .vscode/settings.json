@@ -4,6 +4,10 @@
         "vector": "cpp",
         "*.tcc": "cpp",
         "unordered_map": "cpp",
-        "initializer_list": "cpp"
+        "initializer_list": "cpp",
+        "iosfwd": "cpp",
+        "cstddef": "cpp",
+        "gsl_assert": "cpp",
+        "gsl_util": "cpp"
     }
 }
